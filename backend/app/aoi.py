@@ -85,28 +85,23 @@ def points_from_bbox(
     This IS the real coverage grid -- one point per H3 cell at the project
     resolution, so no two points can collide on h3_cell by construction.
 
+    The polyfill itself lives in core.grid.coverage_cells; this only turns
+    cells into the Point shape adapters take. One implementation of the H3
+    maths, not two that can drift apart.
+
     Land is not filtered. It does not need to be: the marine API returns null
     over land and the adapter drops missing readings, so land cells cost one
-    slot in a batched request and produce no rows. Filtering properly needs a
-    coastline dataset, which is not worth it before it hurts.
+    slot in a batched request and produce no rows.
     """
-    if south >= north or west >= east:
-        raise ValueError(f"degenerate bbox: S={south} W={west} N={north} E={east}")
+    from app.core.grid import centroid, coverage_cells
 
-    poly = h3.LatLngPoly(
-        [(south, west), (south, east), (north, east), (north, west)]
+    cells = coverage_cells(
+        south=south, west=west, north=north, east=east,
+        resolution=resolution, max_cells=max_cells,
     )
-    cells = h3.polygon_to_cells(poly, resolution)
-
-    if len(cells) > max_cells:
-        raise ValueError(
-            f"bbox covers {len(cells)} cells at res {resolution}, over the "
-            f"{max_cells} guard. Shrink the box, or raise max_cells knowingly."
-        )
-
     points = []
-    for cell in sorted(cells):
-        lat, lon = h3.cell_to_latlng(cell)
+    for cell in cells:
+        lat, lon = centroid(cell)
         points.append(Point(round(lat, 6), round(lon, 6), cell))
     return points
 

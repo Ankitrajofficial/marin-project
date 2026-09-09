@@ -20,6 +20,13 @@ geopandas>=1.0             # vector geometry off the DB (pulls shapely, pyproj,
                            # pyogrio -- transitive, not pinned here until core/
                            # imports one of them directly)
 
+# --- API (step 5) ----------------------------------------------------------
+fastapi>=0.115             # routes + response models. The response models are
+                           # load-bearing: `simulated` is a required field, so
+                           # omitting it is a serialization error, not a
+                           # code-review question.
+uvicorn[standard]>=0.32    # ASGI server
+
 # --- transport, for adapters/ (step 3 onward) -------------------------------
 httpx>=0.27                # async HTTP. Open-Meteo batches many points per
                            # request, so adapters issue few, concurrent calls.

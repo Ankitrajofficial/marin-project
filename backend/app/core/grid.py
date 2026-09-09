@@ -40,6 +40,9 @@ __all__ = [
     "grid_distance",
     "coverage_cells",
     "cells_to_latlng",
+    "cell_boundary_geojson",
+    "cell_in_bbox",
+    "filter_cells_in_bbox",
     "fetch_observations",
     "index_observations",
 ]
@@ -86,6 +89,59 @@ def grid_distance(a: str, b: str) -> int:
 
 def cells_to_latlng(cells: Iterable[str]) -> list[tuple[float, float]]:
     return [h3.cell_to_latlng(c) for c in cells]
+
+
+def cell_boundary_geojson(cell: str) -> list[list[float]]:
+    """H3 cell -> a GeoJSON linear ring: closed, [lon, lat], right-hand wound.
+
+    Three conversions happen here, each of which is silently wrong-looking
+    rather than crash-y if skipped:
+
+      * h3 returns (lat, lon) pairs; GeoJSON positions are [lon, lat]. Getting
+        this backwards puts the Bay of Bengal in Somalia and still renders.
+      * A GeoJSON ring must repeat its first position as its last.
+      * RFC 7946 wants exterior rings counter-clockwise. Most renderers do not
+        care, but tools that do (turf, PostGIS ST_GeomFromGeoJSON in strict
+        mode) treat a clockwise exterior as a hole. Cheap to just get right.
+    """
+    ring = [[lon, lat] for lat, lon in h3.cell_to_boundary(cell)]
+
+    # Shoelace: positive area = counter-clockwise in [lon, lat] space.
+    area2 = sum(
+        ring[i][0] * ring[(i + 1) % len(ring)][1] - ring[(i + 1) % len(ring)][0] * ring[i][1]
+        for i in range(len(ring))
+    )
+    if area2 < 0:
+        ring.reverse()
+
+    ring.append(ring[0])
+    return ring
+
+
+def cell_in_bbox(cell: str, west: float, south: float, east: float, north: float) -> bool:
+    """Is this cell's centre inside a WEB-ORDER bbox (west, south, east, north)?
+
+    Note the argument order differs from coverage_cells(south, west, north,
+    east). Web clients (Leaflet, MapLibre, OGC) speak lon-first; H3 and this
+    module speak lat-first. The two orders meet here and nowhere else.
+    """
+    lat, lon = h3.cell_to_latlng(cell)
+    return south <= lat <= north and west <= lon <= east
+
+
+def filter_cells_in_bbox(
+    cells: Iterable[str], west: float, south: float, east: float, north: float
+) -> list[str]:
+    """Keep the cells whose centres fall in the box.
+
+    The API filters ALREADY-COMPUTED cells this way rather than polyfilling the
+    viewport, because polyfill cost scales with the AREA OF THE VIEWPORT while
+    this scales with the amount of data that actually exists. A zoomed-out map
+    of the Indian Ocean polyfills to ~56,000 cells at res 5, almost none of
+    which have been computed -- so the expensive version of the question is
+    also the useless one.
+    """
+    return [c for c in cells if cell_in_bbox(c, west, south, east, north)]
 
 
 def coverage_cells(
