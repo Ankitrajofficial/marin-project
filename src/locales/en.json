@@ -1,0 +1,206 @@
+{
+  "app": {
+    "title": "ORCA",
+    "tagline": "Agentic AI Marine Intelligence Platform",
+    "badge": "SIH 2026 · PS 26176 · Prototype"
+  },
+  "panes": {
+    "conversation": "Conversation",
+    "trace": "Live Reasoning Trace",
+    "map": "Map",
+    "risk": "Risk Assessment"
+  },
+  "input": {
+    "placeholder": "Ask about sea conditions, fishing zones, safety or routes…",
+    "send": "Ask",
+    "listening": "Listening…",
+    "mic": "Speak",
+    "micUnsupported": "Voice input is not supported in this browser",
+    "language": "Language",
+    "reset": "Reset",
+    "speak": "Read answer aloud"
+  },
+  "chips": {
+    "title": "Try a question",
+    "items": [
+      "Where is the nearest Potential Fishing Zone today?",
+      "Is it safe to go to sea tomorrow morning from Kanyakumari?",
+      "What are the tide, weather and sea conditions near my location?",
+      "Any cyclone or lightning alerts in my area?",
+      "What is the safest route from Chennai to Puducherry for a small fishing vessel?",
+      "Am I close to any restricted or international boundary water?",
+      "Why has fish productivity dropped near this coast?"
+    ]
+  },
+  "scenarios": {
+    "title": "Demo scenarios",
+    "hint": "Each runs the real pipeline against live APIs, with a labelled cached snapshot as fallback.",
+    "run": "Run scenario"
+  },
+  "trace": {
+    "waiting": "Ask a question and every agent's work appears here, live.",
+    "planner": "Planner decomposition",
+    "plan": "Execution plan",
+    "agents": "Agents",
+    "tool": "Tool call",
+    "expand": "Show raw payload",
+    "collapse": "Hide raw payload",
+    "evidence": "Evidence",
+    "confidence": "Confidence",
+    "done": "Complete",
+    "running": "Running…",
+    "degraded": "Degraded",
+    "failed": "Failed",
+    "steps": "steps",
+    "noLlm": "No API key — deterministic planner and template synthesis"
+  },
+  "risk": {
+    "title": "Risk assessment",
+    "score": "Risk score",
+    "band": {
+      "SAFE": "SAFE",
+      "CAUTION": "CAUTION",
+      "UNSAFE": "UNSAFE",
+      "UNKNOWN": "INSUFFICIENT DATA"
+    },
+    "bandNote": {
+      "SAFE": "Conditions within normal operating limits",
+      "CAUTION": "Sail only with caution and a working radio",
+      "UNSAFE": "Do not venture to sea",
+      "UNKNOWN": "Not enough data to judge these conditions — this is not clearance to sail"
+    },
+    "triggered": "Triggered rules",
+    "cleared": "Checks cleared",
+    "none": "No hazard rule triggered",
+    "engine": "Deterministic rule engine",
+    "engineNote": "Hazard classification is computed by a deterministic rule engine. No language model is involved in this decision.",
+    "vessel": "Vessel class",
+    "measured": "measured",
+    "threshold": "threshold",
+    "confidence": "Confidence",
+    "completeness": "Data completeness",
+    "waiting": "Run a query to compute a risk assessment."
+  },
+  "map": {
+    "layers": {
+      "pfz": "Potential Fishing Zones",
+      "imbl": "Maritime boundaries",
+      "mpa": "Protected areas",
+      "harbours": "Harbours",
+      "eez": "EEZ (indicative)",
+      "coastline": "Coastline",
+      "route": "Route"
+    },
+    "legend": "Legend",
+    "boundaryWarning": "Boundary proximity",
+    "loading": "Loading map…"
+  },
+  "prov": {
+    "LIVE": "LIVE",
+    "CACHED": "CACHED",
+    "SNAPSHOT": "CACHED SNAPSHOT",
+    "ARCHIVE": "HISTORICAL ARCHIVE",
+    "DERIVED": "DERIVED",
+    "source": "Source",
+    "age": "Age",
+    "fetched": "Fetched"
+  },
+  "alerts": {
+    "title": "Active alerts",
+    "none": "No active warnings for the saved location.",
+    "preview": "Notification preview",
+    "channel": "This is the message that would be delivered over SMS / IVR / push in production. No SMS provider is integrated in this prototype.",
+    "saved": "Saved location",
+    "evaluate": "Refresh"
+  },
+  "ans": {
+    "verdict": {
+      "SAFE": "Conditions look safe for a small fishing vessel.",
+      "CAUTION": "Conditions call for caution.",
+      "UNSAFE": "It is not safe to venture to sea.",
+      "UNKNOWN": "There is not enough data to judge whether it is safe. Treat this as a no-go until the missing data is available."
+    },
+    "at": "Assessment for {loc}, {window}.",
+    "sea": "Sea state: waves {wave} m, swell {swell} m, wave period {period} s, sea surface temperature {sst} °C.",
+    "wind": "Wind {wind} km/h gusting {gust} km/h from the {dir}. {weather}. Rainfall {precip} mm across the window.",
+    "pfzFound": "Nearest potential fishing zone is {km} km {dir} of {loc}, in the {depth} m depth band, with surface temperature {sst} °C and chlorophyll-a {chl} mg/m³.",
+    "pfzNote": "This zone is a demo derivation from sea surface temperature and a chlorophyll proxy. It is not an INCOIS advisory.",
+    "pfzNone": "No candidate fishing zone was found within range of this location.",
+    "geoCritical": "You are {nm} nautical miles from {name}. Turn back now — this is inside the critical buffer.",
+    "geoWarning": "You are {nm} nautical miles from {name}, inside the advisory buffer. Alter course away from the boundary.",
+    "geoAdvisory": "You are {nm} nautical miles from {name}. Stay aware of your position.",
+    "geoClear": "The nearest maritime boundary, {name}, is {nm} nautical miles away. You are well clear.",
+    "geoAccuracy": "Boundary positions in this prototype are approximate and must not be used for navigation.",
+    "mpaInside": "This position is inside {name} ({designation}). {rule}",
+    "route": "Passage from {from} to {to} is about {km} km over {n} scored waypoints. Worst condition on the route is {band}, mean risk score {mean} out of 100.",
+    "routeDetour": "Waypoints forcing caution: {list}",
+    "routeClear": "No waypoint on this route triggered a hazard rule.",
+    "productivity": "Productivity near {loc} is driven by the surface temperature and chlorophyll signal. Current surface temperature is {sst} °C and the nearest derived zone scores {score} out of 1. Warmer surface water suppresses the nutrient mixing that feeds the food chain, so catch falls when the thermal front weakens or moves offshore.",
+    "productivityNote": "A full explanation needs a chlorophyll and SST time series. This prototype ships a single static sample, so this is directional, not a diagnosis.",
+    "harbour": "Nearest harbour of refuge is {name}, {km} km away.",
+    "rules": "Triggered rules: {list}",
+    "noRules": "No hazard threshold was exceeded.",
+    "sources": "Sources: {list}.",
+    "engineNote": "The safety verdict was computed by a deterministic rule engine, not by a language model.",
+    "unknown": "I could not identify what you are asking. ORCA can answer questions about fishing zones, sea and weather conditions, safety before sailing, cyclone and lightning alerts, safe routes between harbours, and proximity to restricted or international waters.",
+    "inland": "This position is {km} km inland from the coastline, so no marine forecast is available for it. The nearest coastal point with data is {name}.",
+    "degraded": "Some data was unavailable for this answer, so confidence is reduced. Missing: {list}.",
+    "replay": "This is a historical replay of {event}, not current conditions."
+  },
+  "window": {
+    "tomorrowMorning": "Tomorrow morning (06:00-12:00 IST)",
+    "tomorrow": "Tomorrow (full day)",
+    "thisMorning": "This morning (06:00-12:00 IST)",
+    "tonight": "Tonight (18:00-23:00 IST)",
+    "thisEvening": "This evening (15:00-20:00 IST)",
+    "next24": "Next 24 hours",
+    "next12": "Next 12 hours"
+  },
+  "wmo": {
+    "0": "Clear sky",
+    "1": "Mainly clear",
+    "2": "Partly cloudy",
+    "3": "Overcast",
+    "45": "Fog",
+    "48": "Rime fog",
+    "51": "Light drizzle",
+    "53": "Moderate drizzle",
+    "55": "Dense drizzle",
+    "61": "Slight rain",
+    "63": "Moderate rain",
+    "65": "Heavy rain",
+    "80": "Slight rain showers",
+    "81": "Moderate rain showers",
+    "82": "Violent rain showers",
+    "95": "Thunderstorm",
+    "96": "Thunderstorm with hail",
+    "99": "Thunderstorm with heavy hail"
+  },
+  "rules": {
+    "wave-danger": "Significant wave height exceeds the high-wave alert threshold",
+    "wave-caution": "Significant wave height in the small-craft advisory band",
+    "swell-danger": "Swell height in the surge alert band",
+    "swell-caution": "Swell hazardous at harbour mouths",
+    "steep-sea": "Short steep sea: wave period below the safe threshold with high waves",
+    "wind-danger": "Sustained wind at or above the IMD fishermen warning threshold",
+    "wind-caution": "Sustained wind in the small-craft advisory band",
+    "gust-danger": "Gusts at squall strength",
+    "gust-caution": "Gusts indicate squall activity",
+    "precip-danger": "Heavy rainfall accumulated across the window",
+    "precip-caution": "Moderate rainfall degrading visibility",
+    "thunderstorm": "Thunderstorm / lightning activity forecast",
+    "visibility": "Visibility below the safe navigation threshold",
+    "imbl-critical": "Critically close to {name}",
+    "imbl-warning": "Inside the advisory buffer of {name}",
+    "imbl-advisory": "Approaching {name}",
+    "mpa-inside": "Inside {name} ({restriction})"
+  },
+  "rulesCleared": {
+    "wave": "Significant wave height",
+    "swell": "Swell height",
+    "wind": "Sustained wind speed",
+    "gust": "Wind gusts",
+    "precip": "Rainfall in window",
+    "imbl": "Distance to nearest maritime boundary"
+  }
+}

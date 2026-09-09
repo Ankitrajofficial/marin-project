@@ -1,0 +1,71 @@
+{
+ "type": "FeatureCollection",
+ "meta": {
+  "source": "ORCA simplified bounding polygons for gazetted Indian marine protected areas",
+  "kind": "CACHED",
+  "generated": "2026-09-09",
+  "warning": "Simplified rectangular approximations of real protected areas. Extents are indicative, not gazetted boundaries. Production consumes the authoritative WDPA / MoEFCC protected-area dataset."
+ },
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "mpa-gulf-of-mannar", "layer": "mpa",
+    "name": "Gulf of Mannar Marine National Park",
+    "designation": "Marine National Park (1980), Biosphere Reserve (1989)",
+    "authority": "Tamil Nadu Forest Department / MoEFCC",
+    "restriction": "no_fishing_core",
+    "rule": "Fishing, anchoring and coral collection prohibited inside the core park area."
+   },
+   "geometry": { "type": "Polygon", "coordinates": [[[78.9500,8.8000],[79.3200,8.8000],[79.3200,9.2500],[78.9500,9.2500],[78.9500,8.8000]]] }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "mpa-gulf-of-kachchh", "layer": "mpa",
+    "name": "Marine National Park & Sanctuary, Gulf of Kachchh",
+    "designation": "Marine National Park (1982) / Marine Sanctuary (1980)",
+    "authority": "Gujarat Forest Department / MoEFCC",
+    "restriction": "regulated",
+    "rule": "Mechanised fishing and coral/mangrove extraction prohibited; entry regulated by permit."
+   },
+   "geometry": { "type": "Polygon", "coordinates": [[[69.2000,22.2500],[70.1500,22.2500],[70.1500,22.7000],[69.2000,22.7000],[69.2000,22.2500]]] }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "mpa-malvan", "layer": "mpa",
+    "name": "Malvan (Marine) Wildlife Sanctuary",
+    "designation": "Marine Wildlife Sanctuary (1987)",
+    "authority": "Maharashtra Forest Department",
+    "restriction": "regulated",
+    "rule": "Trawling prohibited; traditional fishing permitted in the buffer zone."
+   },
+   "geometry": { "type": "Polygon", "coordinates": [[[73.3800,16.0000],[73.5200,16.0000],[73.5200,16.1200],[73.3800,16.1200],[73.3800,16.0000]]] }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "mpa-wandoor", "layer": "mpa",
+    "name": "Mahatma Gandhi Marine National Park, Wandoor",
+    "designation": "Marine National Park (1983)",
+    "authority": "Andaman & Nicobar Forest Department",
+    "restriction": "no_fishing_core",
+    "rule": "Fishing prohibited; entry by permit only."
+   },
+   "geometry": { "type": "Polygon", "coordinates": [[[92.5500,11.4500],[92.7200,11.4500],[92.7200,11.6500],[92.5500,11.6500],[92.5500,11.4500]]] }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "esz-gahirmatha", "layer": "mpa",
+    "name": "Gahirmatha Marine Sanctuary (Olive Ridley nesting)",
+    "designation": "Marine Sanctuary (1997)",
+    "authority": "Odisha Forest Department",
+    "restriction": "seasonal_closure",
+    "rule": "Fishing banned within the no-fishing zone during the Olive Ridley nesting season (1 Nov - 31 May)."
+   },
+   "geometry": { "type": "Polygon", "coordinates": [[[86.7000,20.5500],[87.1000,20.5500],[87.1000,20.9500],[86.7000,20.9500],[86.7000,20.5500]]] }
+  }
+ ]
+}

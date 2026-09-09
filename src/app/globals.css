@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+/*
+ * ORCA design tokens.
+ * Tuned for a projector: dark ground, high-contrast text, and a base font size large
+ * enough to read the trace pane from the back of a judging room.
+ */
+:root {
+  --bg: #050b14;
+  --panel: #0b1524;
+  --panel-2: #101f33;
+  --line: #1d3149;
+  --line-soft: #16273c;
+  --text: #e8f1fb;
+  --text-dim: #9db3cc;
+  --text-faint: #6d87a4;
+  --accent: #22d3ee;
+  --accent-dim: #0e7490;
+
+  --safe: #10b981;
+  --caution: #f59e0b;
+  --unsafe: #f43f5e;
+
+  --live: #10b981;
+  --cached: #f59e0b;
+  --snapshot: #fb923c;
+  --archive: #a78bfa;
+  --derived: #38bdf8;
+}
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Noto Sans", "Noto Sans Tamil", "Noto Sans Devanagari", "Noto Sans Bengali",
+    "Noto Sans Malayalam", "Noto Sans Telugu", sans-serif;
+  margin: 0;
+  overflow: hidden;
+}
+
+.mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; }
+
+.panel { background: var(--panel); border: 1px solid var(--line); }
+.hairline { border-color: var(--line); }
+
+/* Scrollbars: visible enough to show there is more to scroll, quiet enough to ignore. */
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: #24415f; border-radius: 6px; border: 2px solid var(--panel); }
+*::-webkit-scrollbar-thumb:hover { background: #33587c; }
+
+/* Trace cards animate in as they stream, so the eye follows the pipeline executing. */
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.99); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.card-in { animation: slideIn 260ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@keyframes pulseRing {
+  0%   { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.45); }
+  70%  { box-shadow: 0 0 0 9px rgba(34, 211, 238, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0); }
+}
+.pulse { animation: pulseRing 1.5s ease-out infinite; }
+
+@keyframes sweep {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+.running-bar {
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  background-size: 200% 100%;
+  animation: sweep 1.2s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-in, .pulse, .running-bar { animation: none !important; }
+}
+
+/* Leaflet on a dark ground */
+.leaflet-container { background: #08131f !important; font-family: inherit; }
+.leaflet-control-attribution {
+  background: rgba(5, 11, 20, 0.85) !important;
+  color: var(--text-faint) !important;
+  font-size: 10px !important;
+}
+.leaflet-control-attribution a { color: var(--text-dim) !important; }
+.leaflet-bar a {
+  background: var(--panel-2) !important;
+  color: var(--text) !important;
+  border-color: var(--line) !important;
+}
+.leaflet-bar a:hover { background: #17304d !important; }
+.leaflet-popup-content-wrapper, .leaflet-popup-tip {
+  background: var(--panel-2) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--line);
+}
+.leaflet-popup-content { margin: 10px 12px; font-size: 13px; line-height: 1.5; }

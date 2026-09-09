@@ -1,0 +1,628 @@
+{
+ "type": "FeatureCollection",
+ "meta": {
+  "source": "ORCA demo derivation from a static SST + chlorophyll-a proxy table",
+  "kind": "CACHED",
+  "generated": "2026-09-09",
+  "warning": "NOT an INCOIS advisory. Demo derivation only. Production consumes the INCOIS PFZ advisory feed.",
+  "derivation": "score = 0.45*norm(sst_gradient) + 0.55*norm(chlorophyll_a); emit zones with score >= 0.35"
+ },
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "pfz-chennai",
+    "layer": "pfz",
+    "nearest_harbour": "Chennai",
+    "label": "Demo derivation - production consumes the INCOIS PFZ advisory feed",
+    "confidence": "low",
+    "score": 0.431,
+    "sst_c": 28.9,
+    "sst_gradient_c_per_10km": 0.42,
+    "chlorophyll_a_mg_m3": 1.35,
+    "derivation": "score = 0.45*norm(sst_gradient,0.15..0.65) + 0.55*norm(chlorophyll_a,0.6..2.8)",
+    "depth_band_m": "20-60",
+    "advisory_valid_hours": 24
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       80.092,
+       12.3674
+      ],
+      [
+       80.692,
+       12.3674
+      ],
+      [
+       80.692,
+       12.8074
+      ],
+      [
+       80.092,
+       12.8074
+      ],
+      [
+       80.092,
+       12.3674
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "pfz-pdy",
+    "layer": "pfz",
+    "nearest_harbour": "Puducherry",
+    "label": "Demo derivation - production consumes the INCOIS PFZ advisory feed",
+    "confidence": "low",
+    "score": 0.357,
+    "sst_c": 29.2,
+    "sst_gradient_c_per_10km": 0.31,
+    "chlorophyll_a_mg_m3": 1.45,
+    "derivation": "score = 0.45*norm(sst_gradient,0.15..0.65) + 0.55*norm(chlorophyll_a,0.6..2.8)",
+    "depth_band_m": "20-60",
+    "advisory_valid_hours": 24
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       79.5824,
+       11.2619
+      ],
+      [
+       80.1824,
+       11.2619
+      ],
+      [
+       80.1824,
+       11.7019
+      ],
+      [
+       79.5824,
+       11.7019
+      ],
+      [
+       79.5824,
+       11.2619
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "pfz-nagai",
+    "layer": "pfz",
+    "nearest_harbour": "Nagapattinam",
+    "label": "Demo derivation - production consumes the INCOIS PFZ advisory feed",
+    "confidence": "low",
+    "score": 0.373,
+    "sst_c": 29.4,
+    "sst_gradient_c_per_10km": 0.3,
+    "chlorophyll_a_mg_m3": 1.55,
+    "derivation": "score = 0.45*norm(sst_gradient,0.15..0.65) + 0.55*norm(chlorophyll_a,0.6..2.8)",
+    "depth_band_m": "20-60",
+    "advisory_valid_hours": 24
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       79.5817,
+       10.0517
+      ],
+      [
+       80.1817,
+       10.0517
+      ],
+      [
+       80.1817,
+       10.4917
+      ],
+      [
+       79.5817,
+       10.4917
+      ],
+      [
+       79.5817,
+       10.0517
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "pfz-kanyakumari",
+    "layer": "pfz",
+    "nearest_harbour": "Kanyakumari",
+    "label": "Demo derivation - production consumes the INCOIS PFZ advisory feed",
+    "confidence": "high",
+    "score": 0.735,
+    "sst_c": 28.4,
+    "sst_gradient_c_per_10km": 0.55,
+    "chlorophyll_a_mg_m3": 2.1,
+    "derivation": "score = 0.45*norm(sst_gradient,0.15..0.65) + 0.55*norm(chlorophyll_a,0.6..2.8)",
+    "depth_band_m": "20-60",
+    "advisory_valid_hours": 24
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       77.1832,
+       7.3732
+      ],
+      [
+       77.7832,
+       7.3732
+      ],
+      [
+       77.7832,
+       7.8132
+      ],
+      [
+       77.1832,
+       7.8132
+      ],
+      [
+       77.1832,
+       7.3732
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "pfz-vizhinjam",
+    "layer": "pfz",
+    "nearest_harbour": "Vizhinjam",
+    "label": "Demo derivation - production consumes the INCOIS PFZ advisory feed",
+    "confidence": "high",
+    "score": 0.622,
+    "sst_c": 28.2,
+    "sst_gradient_c_per_10km": 0.48,
+    "chlorophyll_a_mg_m3": 1.9,
+    "derivation": "score = 0.45*norm(sst_gradient,0.15..0.65) + 0.55*norm(chlorophyll_a,0.6..2.8)",
+    "depth_band_m": "20-60",
+    "advisory_valid_hours": 24
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       76.6185,
+       7.7156
+      ],
+      [
+       77.2185,
+       7.7156
+      ],
+      [
+       77.2185,
+       8.1556
+      ],
+      [
+       76.6185,
+       8.1556
+      ],
+      [
+       76.6185,
+       7.7156
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "pfz-kochi",
+    "layer": "pfz",
+    "nearest_harbour": "Kochi",
+    "label": "Demo derivation - production consumes the INCOIS PFZ advisory feed",
+    "confidence": "high",
+    "score": 0.914,
+    "sst_c": 28,
+    "sst_gradient_c_per_10km": 0.61,
+    "chlorophyll_a_mg_m3": 2.6,
+    "derivation": "score = 0.45*norm(sst_gradient,0.15..0.65) + 0.55*norm(chlorophyll_a,0.6..2.8)",
+    "depth_band_m": "20-60",
+    "advisory_valid_hours": 24
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       75.8258,
+       9.1761
+      ],
+      [
+       76.4258,
+       9.1761
+      ],
+      [
+       76.4258,
+       9.6161
+      ],
+      [
+       75.8258,
+       9.6161
+      ],
+      [
+       75.8258,
+       9.1761
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "pfz-beypore",
+    "layer": "pfz",
+    "nearest_harbour": "Beypore",
+    "label": "Demo derivation - production consumes the INCOIS PFZ advisory feed",
+    "confidence": "high",
+    "score": 0.624,
+    "sst_c": 28.3,
+    "sst_gradient_c_per_10km": 0.44,
+    "chlorophyll_a_mg_m3": 2.05,
+    "derivation": "score = 0.45*norm(sst_gradient,0.15..0.65) + 0.55*norm(chlorophyll_a,0.6..2.8)",
+    "depth_band_m": "20-60",
+    "advisory_valid_hours": 24
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       75.3422,
+       10.4746
+      ],
+      [
+       75.9422,
+       10.4746
+      ],
+      [
+       75.9422,
+       10.9146
+      ],
+      [
+       75.3422,
+       10.9146
+      ],
+      [
+       75.3422,
+       10.4746
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "pfz-mangaluru",
+    "layer": "pfz",
+    "nearest_harbour": "Mangaluru",
+    "label": "Demo derivation - production consumes the INCOIS PFZ advisory feed",
+    "confidence": "low",
+    "score": 0.418,
+    "sst_c": 28.6,
+    "sst_gradient_c_per_10km": 0.35,
+    "chlorophyll_a_mg_m3": 1.55,
+    "derivation": "score = 0.45*norm(sst_gradient,0.15..0.65) + 0.55*norm(chlorophyll_a,0.6..2.8)",
+    "depth_band_m": "20-60",
+    "advisory_valid_hours": 24
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       74.2838,
+       12.13
+      ],
+      [
+       74.8838,
+       12.13
+      ],
+      [
+       74.8838,
+       12.57
+      ],
+      [
+       74.2838,
+       12.57
+      ],
+      [
+       74.2838,
+       12.13
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "pfz-ratnagiri",
+    "layer": "pfz",
+    "nearest_harbour": "Ratnagiri",
+    "label": "Demo derivation - production consumes the INCOIS PFZ advisory feed",
+    "confidence": "low",
+    "score": 0.384,
+    "sst_c": 28.8,
+    "sst_gradient_c_per_10km": 0.34,
+    "chlorophyll_a_mg_m3": 1.45,
+    "derivation": "score = 0.45*norm(sst_gradient,0.15..0.65) + 0.55*norm(chlorophyll_a,0.6..2.8)",
+    "depth_band_m": "20-60",
+    "advisory_valid_hours": 24
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       72.4972,
+       16.4244
+      ],
+      [
+       73.0972,
+       16.4244
+      ],
+      [
+       73.0972,
+       16.8644
+      ],
+      [
+       72.4972,
+       16.8644
+      ],
+      [
+       72.4972,
+       16.4244
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "pfz-veraval",
+    "layer": "pfz",
+    "nearest_harbour": "Veraval",
+    "label": "Demo derivation - production consumes the INCOIS PFZ advisory feed",
+    "confidence": "high",
+    "score": 0.783,
+    "sst_c": 28.1,
+    "sst_gradient_c_per_10km": 0.52,
+    "chlorophyll_a_mg_m3": 2.4,
+    "derivation": "score = 0.45*norm(sst_gradient,0.15..0.65) + 0.55*norm(chlorophyll_a,0.6..2.8)",
+    "depth_band_m": "20-60",
+    "advisory_valid_hours": 24
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       69.3743,
+       20.6725
+      ],
+      [
+       69.9743,
+       20.6725
+      ],
+      [
+       69.9743,
+       21.1125
+      ],
+      [
+       69.3743,
+       21.1125
+      ],
+      [
+       69.3743,
+       20.6725
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "pfz-vizag",
+    "layer": "pfz",
+    "nearest_harbour": "Visakhapatnam",
+    "label": "Demo derivation - production consumes the INCOIS PFZ advisory feed",
+    "confidence": "moderate",
+    "score": 0.457,
+    "sst_c": 29,
+    "sst_gradient_c_per_10km": 0.38,
+    "chlorophyll_a_mg_m3": 1.6,
+    "derivation": "score = 0.45*norm(sst_gradient,0.15..0.65) + 0.55*norm(chlorophyll_a,0.6..2.8)",
+    "depth_band_m": "20-60",
+    "advisory_valid_hours": 24
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       83.3742,
+       17.1306
+      ],
+      [
+       83.9742,
+       17.1306
+      ],
+      [
+       83.9742,
+       17.5706
+      ],
+      [
+       83.3742,
+       17.5706
+      ],
+      [
+       83.3742,
+       17.1306
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "pfz-paradip",
+    "layer": "pfz",
+    "nearest_harbour": "Paradip",
+    "label": "Demo derivation - production consumes the INCOIS PFZ advisory feed",
+    "confidence": "low",
+    "score": 0.36,
+    "sst_c": 29.3,
+    "sst_gradient_c_per_10km": 0.3,
+    "chlorophyll_a_mg_m3": 1.5,
+    "derivation": "score = 0.45*norm(sst_gradient,0.15..0.65) + 0.55*norm(chlorophyll_a,0.6..2.8)",
+    "depth_band_m": "20-60",
+    "advisory_valid_hours": 24
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       87.0166,
+       19.9825
+      ],
+      [
+       87.6166,
+       19.9825
+      ],
+      [
+       87.6166,
+       20.4225
+      ],
+      [
+       87.0166,
+       20.4225
+      ],
+      [
+       87.0166,
+       19.9825
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "pfz-digha",
+    "layer": "pfz",
+    "nearest_harbour": "Digha",
+    "label": "Demo derivation - production consumes the INCOIS PFZ advisory feed",
+    "confidence": "low",
+    "score": 0.392,
+    "sst_c": 29.5,
+    "sst_gradient_c_per_10km": 0.28,
+    "chlorophyll_a_mg_m3": 1.7,
+    "derivation": "score = 0.45*norm(sst_gradient,0.15..0.65) + 0.55*norm(chlorophyll_a,0.6..2.8)",
+    "depth_band_m": "20-60",
+    "advisory_valid_hours": 24
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       87.8,
+       21.4506
+      ],
+      [
+       88.4,
+       21.4506
+      ],
+      [
+       88.4,
+       21.8906
+      ],
+      [
+       87.8,
+       21.8906
+      ],
+      [
+       87.8,
+       21.4506
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "pfz-tuticorin",
+    "layer": "pfz",
+    "nearest_harbour": "Thoothukudi",
+    "label": "Demo derivation - production consumes the INCOIS PFZ advisory feed",
+    "confidence": "low",
+    "score": 0.411,
+    "sst_c": 29.1,
+    "sst_gradient_c_per_10km": 0.37,
+    "chlorophyll_a_mg_m3": 1.45,
+    "derivation": "score = 0.45*norm(sst_gradient,0.15..0.65) + 0.55*norm(chlorophyll_a,0.6..2.8)",
+    "depth_band_m": "20-60",
+    "advisory_valid_hours": 24
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       77.8013,
+       8.141
+      ],
+      [
+       78.4013,
+       8.141
+      ],
+      [
+       78.4013,
+       8.581
+      ],
+      [
+       77.8013,
+       8.581
+      ],
+      [
+       77.8013,
+       8.141
+      ]
+     ]
+    ]
+   }
+  }
+ ]
+}

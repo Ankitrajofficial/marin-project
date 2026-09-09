@@ -1,0 +1,66 @@
+{
+ "type": "FeatureCollection",
+ "meta": {
+  "source": "ORCA approximation of published IMBL turning points",
+  "kind": "CACHED",
+  "generated": "2026-09-09",
+  "warning": "APPROXIMATE. Digitised from public descriptions of the 1974/1976 India-Sri Lanka agreements and open reporting on the Sir Creek sector. Positions are indicative to roughly 2-5 km and MUST NOT be used for navigation. Production consumes the authoritative boundary dataset from the Survey of India / Indian Navy hydrographic office.",
+  "geofence_buffers_nm": { "critical": 2, "warning": 5, "advisory": 10 }
+ },
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "imbl-ind-lka-palk",
+    "layer": "imbl",
+    "name": "India - Sri Lanka IMBL (Palk Bay / Palk Strait sector)",
+    "agreement": "Agreement of 1974 (approximate turning points)",
+    "authority": "Government of India / Government of Sri Lanka",
+    "accuracy": "approximate"
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [80.0500, 10.0833], [79.5833, 9.9500], [79.3767, 9.6692],
+     [79.5117, 9.3633], [79.5333, 9.2167]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "imbl-ind-lka-mannar",
+    "layer": "imbl",
+    "name": "India - Sri Lanka IMBL (Gulf of Mannar sector)",
+    "agreement": "Agreement of 1976 (approximate extension)",
+    "authority": "Government of India / Government of Sri Lanka",
+    "accuracy": "approximate"
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [79.5333, 9.2167], [79.2500, 8.8667], [78.7500, 8.4500],
+     [78.4167, 8.1000], [77.8333, 7.6667]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "id": "imbl-ind-pak-sircreek",
+    "layer": "imbl",
+    "name": "India - Pakistan maritime limit (Sir Creek sector)",
+    "agreement": "No delimitation agreement in force - sector is disputed",
+    "authority": "Disputed",
+    "accuracy": "indicative only",
+    "note": "Shown as an indicative limit for the geofencing demo. The maritime boundary in the Sir Creek sector is unresolved between India and Pakistan."
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [68.1833, 23.9667], [67.9000, 23.5000], [67.5000, 23.0000], [67.0000, 22.5000]
+    ]
+   }
+  }
+ ]
+}

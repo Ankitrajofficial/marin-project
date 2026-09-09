@@ -1,0 +1,30 @@
+{
+  "meta": {
+    "source": "Compiled from public port/landing-centre listings (CMFRI Marine Fisheries Census, state fisheries department directories)",
+    "kind": "CACHED",
+    "compiled": "2026-09-09",
+    "note": "Coordinates are harbour-mouth approximations, accurate to roughly 1-2 km. Used for text location resolution and nearest-harbour queries."
+  },
+  "harbours": [
+    { "id": "kanyakumari", "name": "Kanyakumari", "aliases": ["cape comorin", "kaniyakumari", "kanniyakumari"], "state": "Tamil Nadu", "coast": "south", "lat": 8.0883, "lon": 77.5385, "type": "landing_centre" },
+    { "id": "chennai", "name": "Chennai (Kasimedu)", "aliases": ["madras", "kasimedu", "royapuram"], "state": "Tamil Nadu", "coast": "east", "lat": 13.1265, "lon": 80.2960, "type": "fishing_harbour" },
+    { "id": "puducherry", "name": "Puducherry", "aliases": ["pondicherry", "pondy"], "state": "Puducherry", "coast": "east", "lat": 11.9330, "lon": 79.8360, "type": "fishing_harbour" },
+    { "id": "rameswaram", "name": "Rameswaram", "aliases": ["rameshwaram", "ramesvaram", "pamban"], "state": "Tamil Nadu", "coast": "east", "lat": 9.2876, "lon": 79.3129, "type": "fishing_harbour" },
+    { "id": "nagapattinam", "name": "Nagapattinam", "aliases": ["nagapattinam", "nagore"], "state": "Tamil Nadu", "coast": "east", "lat": 10.7660, "lon": 79.8420, "type": "fishing_harbour" },
+    { "id": "thoothukudi", "name": "Thoothukudi (Tuticorin)", "aliases": ["tuticorin", "thoothukkudi"], "state": "Tamil Nadu", "coast": "south", "lat": 8.7642, "lon": 78.1348, "type": "fishing_harbour" },
+    { "id": "paradip", "name": "Paradip", "aliases": ["paradeep", "paradwip"], "state": "Odisha", "coast": "east", "lat": 20.2648, "lon": 86.6753, "type": "fishing_harbour" },
+    { "id": "visakhapatnam", "name": "Visakhapatnam", "aliases": ["vizag", "vishakhapatnam"], "state": "Andhra Pradesh", "coast": "east", "lat": 17.6868, "lon": 83.2185, "type": "fishing_harbour" },
+    { "id": "digha", "name": "Digha (Shankarpur)", "aliases": ["shankarpur", "deegha"], "state": "West Bengal", "coast": "east", "lat": 21.6270, "lon": 87.5090, "type": "fishing_harbour" },
+    { "id": "kochi", "name": "Kochi (Thoppumpady)", "aliases": ["cochin", "ernakulam", "thoppumpady"], "state": "Kerala", "coast": "west", "lat": 9.9312, "lon": 76.2600, "type": "fishing_harbour" },
+    { "id": "beypore", "name": "Beypore (Kozhikode)", "aliases": ["kozhikode", "calicut"], "state": "Kerala", "coast": "west", "lat": 11.1712, "lon": 75.8010, "type": "fishing_harbour" },
+    { "id": "vizhinjam", "name": "Vizhinjam (Thiruvananthapuram)", "aliases": ["thiruvananthapuram", "trivandrum", "vizhingam"], "state": "Kerala", "coast": "south", "lat": 8.3780, "lon": 76.9930, "type": "fishing_harbour" },
+    { "id": "mangaluru", "name": "Mangaluru", "aliases": ["mangalore", "panambur"], "state": "Karnataka", "coast": "west", "lat": 12.8438, "lon": 74.8380, "type": "fishing_harbour" },
+    { "id": "malpe", "name": "Malpe (Udupi)", "aliases": ["udupi"], "state": "Karnataka", "coast": "west", "lat": 13.3500, "lon": 74.7050, "type": "fishing_harbour" },
+    { "id": "ratnagiri", "name": "Ratnagiri (Mirkarwada)", "aliases": ["mirkarwada"], "state": "Maharashtra", "coast": "west", "lat": 16.9902, "lon": 73.3120, "type": "fishing_harbour" },
+    { "id": "mumbai", "name": "Mumbai (Sassoon Dock)", "aliases": ["bombay", "sassoon dock", "versova"], "state": "Maharashtra", "coast": "west", "lat": 18.9200, "lon": 72.8330, "type": "fishing_harbour" },
+    { "id": "veraval", "name": "Veraval", "aliases": ["somnath"], "state": "Gujarat", "coast": "west", "lat": 20.9060, "lon": 70.3660, "type": "fishing_harbour" },
+    { "id": "okha", "name": "Okha (Dwarka)", "aliases": ["dwarka"], "state": "Gujarat", "coast": "west", "lat": 22.4700, "lon": 69.0750, "type": "fishing_harbour" },
+    { "id": "portblair", "name": "Port Blair", "aliases": ["andaman"], "state": "Andaman & Nicobar", "coast": "island", "lat": 11.6234, "lon": 92.7265, "type": "fishing_harbour" },
+    { "id": "gopalpur", "name": "Gopalpur", "aliases": ["ganjam"], "state": "Odisha", "coast": "east", "lat": 19.2650, "lon": 84.9110, "type": "landing_centre" }
+  ]
+}
