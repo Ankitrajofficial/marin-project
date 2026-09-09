@@ -1,0 +1,24 @@
+# ORCA backend.
+# Python 3.11 (pinned in .python-version). Not 3.14: the scientific wheels
+# below are not reliably prebuilt for it yet, and core/ depends on all of them.
+
+# --- the Observation contract (step 2) -------------------------------------
+pydantic>=2.9              # the Observation contract
+pydantic-settings>=2.6     # env loading in config.py
+psycopg[binary,pool]>=3.2  # driver + async connection pool
+h3>=4.1                    # lat/lon -> cell. v4 renamed the whole API
+                           # (geo_to_h3 -> latlng_to_cell); pinning >=4.1 so
+                           # pasted v3 snippets fail loudly, not silently.
+
+# --- numerics, for core/ (step 4 onward) -----------------------------------
+# Declared now because they are already installed in the venv; leaving them
+# undeclared would mean a fresh clone silently gets a different environment.
+numpy>=2.1                 # arrays underneath everything in core/
+scipy>=1.14                # interpolation + the EOF decomposition gapfill.py needs
+xarray>=2024.9             # labelled grids for gridded source data
+geopandas>=1.0             # vector geometry off the DB (pulls shapely, pyproj,
+                           # pyogrio -- transitive, not pinned here until core/
+                           # imports one of them directly)
+
+# Nothing that fetches is listed yet -- httpx arrives with the first real
+# adapter in step 3, deliberately, so the list tracks the build order.
