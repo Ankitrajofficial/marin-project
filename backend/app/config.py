@@ -47,6 +47,43 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
 
+    # --- LLM -------------------------------------------------------------
+    # Provider AND model live here, never inline in a graph node. Swapping
+    # either is a config change.
+    #
+    # Everything provider-specific -- endpoint shape, auth header, sampling
+    # parameters, structured-output mode, retry policy -- is confined to
+    # agents/llm.py. No graph node imports a provider SDK or knows a
+    # provider's name. That boundary is why this swap touched one module.
+    llm_provider: str = "gemini"
+    # gemini-2.5-flash is retired for new API users (the endpoint returns a
+    # 404 naming its replacement). Changing this line is the whole migration.
+    llm_model: str = "gemini-3.6-flash"
+    #: OpenAI-compatible endpoint. Gemini exposes one, so llm.py speaks a
+    #: single wire format and any OpenAI-compatible provider drops in.
+    llm_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai"
+
+    llm_max_tokens: int = 4096
+    llm_temperature: float = 0.0
+
+    #: "json_schema" is stricter; llm.py falls back to "json_object" by itself
+    #: if the provider rejects the schema, so this rarely needs changing.
+    llm_structured_mode: str = "json_schema"
+
+    # --- free-tier survival ----------------------------------------------
+    #: Hard per-request timeout. A hung request is worse than a failed one:
+    #: the user stares at a spinner instead of reading an error.
+    llm_timeout_s: float = 45.0
+    #: Total wall-clock budget across ALL retries, so backoff can never
+    #: outlast a user's patience or a proxy's timeout.
+    llm_deadline_s: float = 120.0
+    llm_max_retries: int = 4
+    llm_backoff_base_s: float = 1.5
+
+    # Provider keys. Only the one matching llm_provider is used.
+    gemini_api_key: str | None = None
+    openai_api_key: str | None = None
+
     # Tier 2 sources (registration required). Optional: absence must not stop
     # the app booting, it only stops the adapters that need them.
     aisstream_api_key: str | None = None

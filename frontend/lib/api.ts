@@ -1,5 +1,5 @@
 import type {
-  CellTrace, GeofenceResponse, RiskFeatureCollection, RiskTimes,
+  CellTrace, ChatResponse, GeofenceResponse, RiskFeatureCollection, RiskTimes,
   ZoneFeatureCollection,
 } from "./types";
 
@@ -35,3 +35,17 @@ export const fetchGeofence = (lat: number, lon: number, bufferNm = 2) =>
   get<GeofenceResponse>(`/api/geofence?lat=${lat}&lon=${lon}&buffer_nm=${bufferNm}`);
 
 export const fetchZones = () => get<ZoneFeatureCollection>("/api/zones");
+
+export async function sendChat(message: string, sessionId: string | null) {
+  const res = await fetch(`${BASE}/api/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, session_id: sessionId }),
+  });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try { detail = (await res.json()).detail ?? detail; } catch { /* non-JSON */ }
+    throw new Error(detail);
+  }
+  return (await res.json()) as ChatResponse;
+}

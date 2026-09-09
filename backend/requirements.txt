@@ -27,6 +27,13 @@ fastapi>=0.115             # routes + response models. The response models are
                            # code-review question.
 uvicorn[standard]>=0.32    # ASGI server
 
+# --- agents (step 7) --------------------------------------------------------
+langgraph>=0.2             # StateGraph + in-memory checkpointer
+# No provider SDK. agents/llm.py speaks the OpenAI-compatible chat-completions
+# wire format over httpx (already required above), which Gemini exposes. That
+# keeps the provider swappable from config and keeps free-tier retry/timeout
+# policy under our control rather than a vendor client's defaults.
+
 # --- transport, for adapters/ (step 3 onward) -------------------------------
 httpx>=0.27                # async HTTP. Open-Meteo batches many points per
                            # request, so adapters issue few, concurrent calls.

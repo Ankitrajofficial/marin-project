@@ -227,9 +227,20 @@ CREATE TABLE IF NOT EXISTS advisory_chunks (
 CREATE TABLE IF NOT EXISTS traces (
     trace_id     BIGSERIAL PRIMARY KEY,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    session_id   TEXT,             -- groups a multi-turn conversation.
+                                   -- Conversation STATE lives in LangGraph's
+                                   -- in-memory checkpointer and is lost when
+                                   -- the API restarts; this table is the
+                                   -- durable record. Good enough for a demo,
+                                   -- not for production -- see agents/graph.py.
     user_query   TEXT,
-    steps        JSONB,
+    steps        JSONB,             -- every node and tool call: validated
+                                   -- input, full output, duration. Replayable,
+                                   -- not a summary.
     final_answer TEXT,
+    -- NULL means geofencing was not involved. That is NOT the same as
+    -- advisory_only=false, which would claim an authoritative boundary.
+    advisory_only BOOLEAN,
     -- Same guard as risk_cells.simulated: if any number in this trace came
     -- from scenario data, the whole trace is simulated and the API says so.
     simulated    BOOLEAN NOT NULL DEFAULT false

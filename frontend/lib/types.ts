@@ -118,3 +118,30 @@ export interface ZoneFeatureCollection {
   disclaimer: string;
   features: Array<{ type: "Feature"; geometry: GeoJSON.Geometry; properties: ZoneProperties }>;
 }
+
+// ---------------------------------------------------------------------------
+// Chat. `simulated` and `advisory_only` are non-optional for the same reason
+// they are on every other response: a component cannot render an answer
+// without having the provenance in hand.
+export interface ChatSource {
+  source_id: string;
+  variables: string[];
+  age_minutes: number | null;
+  age_is_lower_bound: boolean;
+  issued_time_kind: string | null;
+  reliability: number | null;
+  simulated: boolean;
+}
+
+export interface ChatResponse {
+  session_id: string;
+  answer: string;
+  trace: Array<Record<string, unknown>>;
+  plan: Record<string, unknown> | null;
+  findings: string;
+  sources: ChatSource[];
+  simulated: boolean;
+  advisory_only: boolean | null;
+  fell_back: boolean;
+  highlights: { cells: string[]; zones: string[] };
+}

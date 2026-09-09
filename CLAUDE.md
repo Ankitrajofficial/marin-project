@@ -64,10 +64,17 @@ result must never be presentable as a real forecast.
 5. frontend/ — Next.js + MapLibre + OSM tiles (no Mapbox, no map key)
 
 ## Primary demo
-Cyclone scenario, N boats at sea. Output = prioritized recall list for
-the coastal authority, a safe route per boat, and a reasoning trace
-showing which data was used and how old it was. PFZ fishing advisory is
-a side output of the same engine, not the main product.
+Ask a question in plain language and get an answer whose every number is
+traceable: "is it safe to go out tomorrow morning near Nagapattinam?" ->
+exceedance probabilities from core/risk.py over that cell and window, with
+sources, data age and uncertainty shown. "How close am I to the boundary?" ->
+deterministic geofencing against the India-Sri Lanka IMBL. The reasoning trace
+is part of the answer, not a debug view: it is what makes the number checkable.
+
+The disaster-management extension on top: cyclone scenario, N boats at sea,
+a prioritized recall list for the coastal authority and a safe route per boat.
+Same engine, same trace, higher stakes. PFZ fishing advisory is a side output
+of the same engine, not a separate product.
 
 ## Stack
 PostgreSQL 16 + PostGIS + TimescaleDB + pgvector. One database, no Redis
@@ -108,10 +115,12 @@ negative costs a boat and its crew's liberty.
 6 zones/ + core/geofence.py — IMBL, MPA, restricted waters. Explicit PS
   requirement, and routing needs it as a hard constraint: a route that
   crosses the IMBL is worse than no route.
-7 adapters/aisstream.py + core/recall.py
-8 core/routing.py
-9 core/gapfill.py
-10 agents/ — last, demo works without it
+7 agents/ — the conversational layer. Moved ahead of recall because it is
+  the heart of the PS: the LLM plans and verbalizes, core/ produces every
+  number, guards reject any figure not present in a tool result.
+8 adapters/aisstream.py + core/recall.py
+9 core/routing.py
+10 core/gapfill.py
 
 ## How to work with me
 Plan first, wait for approval, then write. One build step at a time.

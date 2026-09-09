@@ -45,10 +45,13 @@ const ZONE_LINE_COLOR: (string | string[])[] = [
 
 export default function MapView({
   data, zones, selectedCell, onBboxChange, onCellClick, onMapClick, marker,
+  highlightCells, highlightZones,
 }: {
   data: RiskFeatureCollection | null;
   zones: ZoneFeatureCollection | null;
   selectedCell: string | null;
+  highlightCells: string[];
+  highlightZones: string[];
   onBboxChange: (bbox: [number, number, number, number]) => void;
   onCellClick: (cell: string) => void;
   onMapClick: (lat: number, lon: number) => void;
@@ -106,6 +109,20 @@ export default function MapView({
           "line-color": ["case", ["get", "simulated"], SIMULATED_OUTLINE, "#5b7085"],
           "line-width": ["case", ["get", "simulated"], 2.5, 0.6],
         },
+      });
+
+      // Cells and zones an answer referred to. Separate from the click
+      // selection so a chat answer can light up several at once without
+      // fighting whatever the user last clicked.
+      m.addLayer({
+        id: "risk-highlight", type: "line", source: "risk",
+        filter: ["in", ["get", "h3_cell"], ["literal", []]],
+        paint: { "line-color": "#4da3d4", "line-width": 3 },
+      });
+      m.addLayer({
+        id: "zone-highlight", type: "line", source: "zones",
+        filter: ["in", ["get", "zone_id"], ["literal", []]],
+        paint: { "line-color": "#ffffff", "line-width": 3.5 },
       });
 
       m.addLayer({
@@ -186,6 +203,15 @@ export default function MapView({
     if (!m || !m.getLayer("risk-selected")) return;
     m.setFilter("risk-selected", ["==", ["get", "h3_cell"], selectedCell ?? ""]);
   }, [selectedCell]);
+
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !m.getLayer("risk-highlight")) return;
+    m.setFilter("risk-highlight",
+      ["in", ["get", "h3_cell"], ["literal", highlightCells]]);
+    m.setFilter("zone-highlight",
+      ["in", ["get", "zone_id"], ["literal", highlightZones]]);
+  }, [highlightCells, highlightZones]);
 
   return <div id="map" ref={ref} />;
 }

@@ -5,6 +5,7 @@ import MapView from "@/components/MapView";
 import TimeSlider from "@/components/TimeSlider";
 import TracePanel from "@/components/TracePanel";
 import Legend from "@/components/Legend";
+import ChatPanel from "@/components/ChatPanel";
 import GeofencePanel from "@/components/GeofencePanel";
 import { fetchGeofence, fetchRisk, fetchTimes, fetchTrace, fetchZones } from "@/lib/api";
 import type {
@@ -25,6 +26,9 @@ export default function Page() {
   const [geofence, setGeofence] = useState<GeofenceResponse | null>(null);
   const [gfLoading, setGfLoading] = useState(false);
   const [gfError, setGfError] = useState<string | null>(null);
+
+  const [hlCells, setHlCells] = useState<string[]>([]);
+  const [hlZones, setHlZones] = useState<string[]>([]);
 
   const [selected, setSelected] = useState<string | null>(null);
   const [trace, setTrace] = useState<CellTrace | null>(null);
@@ -85,6 +89,9 @@ export default function Page() {
   const onMapClick = useCallback(
     (lat: number, lon: number) => setPoint({ lat, lon }), []
   );
+  const onHighlight = useCallback((cells: string[], zones: string[]) => {
+    setHlCells(cells); setHlZones(zones);
+  }, []);
   const closePanel = useCallback(() => {
     setSelected(null); setPoint(null); setGeofence(null); setGfError(null);
   }, []);
@@ -108,7 +115,11 @@ export default function Page() {
         onCellClick={onCellClick}
         onMapClick={onMapClick}
         marker={point}
+        highlightCells={hlCells}
+        highlightZones={hlZones}
       />
+
+      <ChatPanel onHighlight={onHighlight} />
 
       <div className="topbar">
         <div className="brand">
