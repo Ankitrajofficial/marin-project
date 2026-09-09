@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routers import cells, health, risk
+from app.api.routers import cells, geofence, health, risk
 from app.config import settings
 from app.db import close_pool, open_pool
 
@@ -38,7 +38,11 @@ app = FastAPI(
         "observations that produced it.\n\n"
         "**Simulated data**: any response carrying a hazard number includes a "
         "`simulated` flag. When true, the number came from injected scenario "
-        "data and MUST NOT be presented as a real forecast."
+        "data and MUST NOT be presented as a real forecast.\n\n"
+        "**Boundaries**: geofencing uses open datasets (MarineRegions/VLIZ, "
+        "OpenStreetMap). They are ADVISORY ONLY, are not Survey of India "
+        "definitions, and carry no legal authority. Every geofence response "
+        "carries `advisory_only` and the required attributions."
     ),
     version="0.1.0",
     lifespan=lifespan,
@@ -54,3 +58,4 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(risk.router)
 app.include_router(cells.router)
+app.include_router(geofence.router)

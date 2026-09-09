@@ -81,16 +81,37 @@ Tier 3 (no API, bulletin/scrape): INCOIS PFZ, INCOIS OSF.
 The adapter layer exists because these tiers differ in format, units,
 time convention and access model. That normalization is a feature.
 
+## Boundaries are advisory, never legal
+Geofencing uses open data: MarineRegions/VLIZ (CC-BY 4.0) for the IMBL, EEZ,
+territorial sea and baselines; OpenStreetMap (ODbL) for marine protected
+areas. Neither is Survey of India, neither carries legal authority, and India
+regulates how its boundaries may be depicted. WDPA/Protected Planet is the
+proper MPA source but needs a token (Tier 2) — swapping it in means replacing
+zones/osm_protected.py and nothing else.
+
+hazard_zones.authority is NOT NULL, and every geofence response carries
+advisory_only and attributions as REQUIRED fields — same enforcement pattern
+as `simulated`. No map, panel, or agent sentence may present these lines as
+the legal boundary.
+
+Verdicts apply an explicit uncertainty margin (boundary-data error + vessel
+position error) so "clear" means clear BY A MARGIN. The target is zero false
+negatives on the IMBL: a false positive costs a course change, a false
+negative costs a boat and its crew's liberty.
+
 ## Build order — do not jump ahead
 1 db schema + docker
 2 adapters/base.py (the Observation contract)
 3 adapters/open_meteo.py + ingest job
 4 core/grid.py + core/risk.py
 5 api + map (first visible output)
-6 adapters/aisstream.py + core/recall.py
-7 core/routing.py
-8 core/gapfill.py
-9 agents/ — last, demo works without it
+6 zones/ + core/geofence.py — IMBL, MPA, restricted waters. Explicit PS
+  requirement, and routing needs it as a hard constraint: a route that
+  crosses the IMBL is worse than no route.
+7 adapters/aisstream.py + core/recall.py
+8 core/routing.py
+9 core/gapfill.py
+10 agents/ — last, demo works without it
 
 ## How to work with me
 Plan first, wait for approval, then write. One build step at a time.

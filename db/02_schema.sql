@@ -78,12 +78,65 @@ CREATE TABLE IF NOT EXISTS vessel_positions (
 -- --------------------------------------------------------- hazard_zones
 -- Static/slow polygons: restricted areas, reefs, declared cyclone zones.
 CREATE TABLE IF NOT EXISTS hazard_zones (
-    zone_id   TEXT PRIMARY KEY,
-    zone_type TEXT NOT NULL,
-    name      TEXT,
-    geom      GEOMETRY(Polygon, 4326) NOT NULL
+    zone_id     TEXT PRIMARY KEY,
+    zone_type   TEXT NOT NULL,    -- 'imbl' | 'eez' | 'territorial_sea'
+                                  -- 'contiguous_zone' | 'baseline' | 'mpa'
+    name        TEXT,
+
+    -- Geometry(Geometry), not Geometry(Polygon): a maritime boundary is a
+    -- LINE, not an area. The India-Sri Lanka IMBL is a treaty line; the EEZ
+    -- and an MPA are polygons. Forcing lines into a polygon column would mean
+    -- either dropping the IMBL or fabricating an area for it -- and the IMBL
+    -- is the single most consequential geometry in this table.
+    geom        GEOMETRY(Geometry, 4326) NOT NULL,
+
+    -- The thing you measure distance TO. For a polygon that is its boundary
+    -- (distance to a polygon you are inside is 0, which tells a skipper
+    -- nothing about how close they are to crossing out); for a line it is the
+    -- line itself. Generated, so it can never disagree with geom.
+    edge_geom   GEOMETRY(Geometry, 4326) GENERATED ALWAYS AS (
+                    CASE WHEN GeometryType(geom) IN ('POLYGON', 'MULTIPOLYGON')
+                         THEN ST_Boundary(geom) ELSE geom END
+                ) STORED,
+
+    -- ===================== PROVENANCE AND AUTHORITY =====================
+    -- HARD GUARD, same pattern as risk_cells.simulated.
+    --
+    -- 'official'            an authoritative government definition
+    -- 'open_data_advisory'  an open-data compilation. Everything currently in
+    --                       this table is this. MarineRegions is a VLIZ
+    --                       scientific compilation; OSM protected areas are
+    --                       crowd-sourced. NEITHER is Survey of India, and
+    --                       India regulates the depiction of its boundaries.
+    --
+    -- A distance-to-IMBL number reads as authoritative to a fisherman or an
+    -- officer whether or not we meant it to. NOT NULL means the loader has to
+    -- state which it is, and the API surfaces it on every response, so no
+    -- endpoint can quietly present an advisory line as a legal one.
+    authority   TEXT NOT NULL,
+    attribution TEXT NOT NULL,    -- must be displayed wherever this is shown
+    license     TEXT,
+    source_id   TEXT REFERENCES sources(source_id),
+    source_url  TEXT,
+    meta        JSONB,            -- treaty date, IUCN class, upstream ids
+    fetched_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    CONSTRAINT hazard_zones_geom_type CHECK (
+        GeometryType(geom) IN ('POLYGON', 'MULTIPOLYGON',
+                               'LINESTRING', 'MULTILINESTRING')),
+    CONSTRAINT hazard_zones_authority CHECK (
+        authority IN ('official', 'open_data_advisory'))
 );
 CREATE INDEX IF NOT EXISTS hazard_zones_geom_idx ON hazard_zones USING GIST (geom);
+CREATE INDEX IF NOT EXISTS hazard_zones_edge_idx ON hazard_zones USING GIST (edge_geom);
+-- ST_DWithin/ST_Distance on geography are GEODESIC -- metres on the ellipsoid,
+-- not degrees. That is the only correct way to answer "how many nautical miles
+-- to the boundary". These indexes are what keep it fast.
+CREATE INDEX IF NOT EXISTS hazard_zones_geog_idx
+    ON hazard_zones USING GIST (CAST(geom AS geography));
+CREATE INDEX IF NOT EXISTS hazard_zones_edge_geog_idx
+    ON hazard_zones USING GIST (CAST(edge_geom AS geography));
+CREATE INDEX IF NOT EXISTS hazard_zones_type_idx ON hazard_zones (zone_type);
 
 -- --------------------------------------------------------- observations
 -- The single normalized shape every adapter writes into. Zero computation

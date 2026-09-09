@@ -72,3 +72,49 @@ export interface CellTrace {
   simulated: boolean; simulated_sources: string[];
   drivers: Drivers; observations: TraceObservation[];
 }
+
+// ---------------------------------------------------------------------------
+// Geofencing. `authority` and `advisory_only` are non-optional: TypeScript
+// will not let a component render a boundary distance without having in hand
+// the fact that the boundary is advisory, not legal.
+export interface ZoneHit {
+  zone_id: string;
+  zone_type: string;
+  name: string | null;
+  authority: string;
+  attribution: string;
+  inside: boolean;
+  verdict: "inside" | "alert" | "clear";
+  distance_nm: number;
+  effective_distance_nm: number;
+  margin_nm: number;
+  bearing_deg: number | null;
+  closest_lat: number | null;
+  closest_lon: number | null;
+  meta: Record<string, unknown>;
+}
+
+export interface GeofenceResponse {
+  lat: number; lon: number; buffer_nm: number;
+  verdict: "inside" | "alert" | "clear";
+  inside: ZoneHit[];
+  alerts: ZoneHit[];
+  nearest_by_type: Record<string, ZoneHit>;
+  advisory_only: boolean;
+  attributions: string[];
+  disclaimer: string;
+}
+
+export interface ZoneProperties {
+  zone_id: string; zone_type: string; name: string | null;
+  authority: string; attribution: string; meta: Record<string, unknown>;
+}
+
+export interface ZoneFeatureCollection {
+  type: "FeatureCollection";
+  n_features: number;
+  advisory_only: boolean;
+  attributions: string[];
+  disclaimer: string;
+  features: Array<{ type: "Feature"; geometry: GeoJSON.Geometry; properties: ZoneProperties }>;
+}

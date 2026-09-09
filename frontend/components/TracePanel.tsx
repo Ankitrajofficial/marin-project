@@ -4,27 +4,20 @@ import type { CellTrace } from "@/lib/types";
 import { fmtAge, fmtPct } from "@/lib/color";
 
 export default function TracePanel({
-  trace, loading, error, onClose,
+  trace, loading, error,
 }: {
   trace: CellTrace | null; loading: boolean; error: string | null;
-  onClose: () => void;
 }) {
-  if (loading) return <aside className="panel"><p className="hint">Loading trace…</p></aside>;
-  if (error) return (
-    <aside className="panel">
-      <button className="close" onClick={onClose}>×</button>
-      <div className="warn">{error}</div>
-    </aside>
-  );
+  if (loading) return <p className="hint">Loading trace…</p>;
+  if (error) return <div className="warn">{error}</div>;
   if (!trace) return null;
 
   const d = trace.drivers;
   const vars = Object.entries(d.variables ?? {});
 
   return (
-    <aside className="panel">
-      <button className="close" onClick={onClose}>×</button>
-      <h2>Cell trace</h2>
+    <>
+      <h3>Hazard cell</h3>
       <div className="cell">{trace.h3_cell}</div>
 
       {/* The guard, rendered. A simulated number must never read as a forecast. */}
@@ -173,6 +166,6 @@ export default function TracePanel({
         “at least” ages come from sources that publish no model run time, so the
         timestamp is when ORCA fetched the value — the data is at least that old.
       </p>
-    </aside>
+    </>
   );
 }

@@ -132,3 +132,76 @@ class Health(BaseModel):
     sources: list[SourceHealth]
     n_risk_cells: int
     n_simulated_risk_cells: int
+
+
+# ---------------------------------------------------------------------------
+# /api/geofence and /api/zones
+# ---------------------------------------------------------------------------
+class ZoneHitOut(BaseModel):
+    zone_id: str
+    zone_type: str
+    name: str | None
+    #: 'official' | 'open_data_advisory'. Required, no default -- same guard as
+    #: `simulated`: an endpoint cannot forget to say whether a boundary carries
+    #: legal authority.
+    authority: str
+    attribution: str
+
+    inside: bool
+    verdict: str                      # 'inside' | 'alert' | 'clear'
+    #: Geodesic distance to the zone EDGE, nautical miles.
+    distance_nm: float
+    #: distance_nm minus the uncertainty budget. The verdict is computed from
+    #: THIS, never from distance_nm.
+    effective_distance_nm: float
+    margin_nm: float
+    bearing_deg: float | None
+    closest_lat: float | None
+    closest_lon: float | None
+    meta: dict[str, Any] = Field(default_factory=dict)
+
+
+class GeofenceResponse(BaseModel):
+    lat: float
+    lon: float
+    buffer_nm: float
+    verdict: str
+
+    inside: list[ZoneHitOut]
+    alerts: list[ZoneHitOut]
+    nearest_by_type: dict[str, ZoneHitOut]
+
+    #: REQUIRED, no default. True while every loaded zone is open data.
+    #: MarineRegions is a VLIZ compilation and OSM is crowd-sourced; neither is
+    #: Survey of India and neither carries legal authority. A client rendering
+    #: a distance-to-IMBL without this is presenting an advisory line as a
+    #: legal one.
+    advisory_only: bool
+    #: Attribution strings that MUST be displayed alongside any of these
+    #: numbers. Required, not defaulted, for the same reason.
+    attributions: list[str]
+    disclaimer: str
+
+
+class ZoneProperties(BaseModel):
+    zone_id: str
+    zone_type: str
+    name: str | None
+    authority: str
+    attribution: str
+    meta: dict[str, Any] = Field(default_factory=dict)
+
+
+class ZoneFeature(BaseModel):
+    type: Literal["Feature"] = "Feature"
+    geometry: dict[str, Any]
+    properties: ZoneProperties
+
+
+class ZoneFeatureCollection(BaseModel):
+    type: Literal["FeatureCollection"] = "FeatureCollection"
+    n_features: int
+    advisory_only: bool
+    attributions: list[str]
+    disclaimer: str
+    features: list[ZoneFeature]

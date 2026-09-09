@@ -5,8 +5,11 @@ import MapView from "@/components/MapView";
 import TimeSlider from "@/components/TimeSlider";
 import TracePanel from "@/components/TracePanel";
 import Legend from "@/components/Legend";
-import { fetchRisk, fetchTimes, fetchTrace } from "@/lib/api";
-import type { CellTrace, RiskFeatureCollection } from "@/lib/types";
+import GeofencePanel from "@/components/GeofencePanel";
+import { fetchGeofence, fetchRisk, fetchTimes, fetchTrace, fetchZones } from "@/lib/api";
+import type {
+  CellTrace, GeofenceResponse, RiskFeatureCollection, ZoneFeatureCollection,
+} from "@/lib/types";
 
 type Bbox = [number, number, number, number];
 
@@ -16,6 +19,12 @@ export default function Page() {
   const [bbox, setBbox] = useState<Bbox | null>(null);
   const [risk, setRisk] = useState<RiskFeatureCollection | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const [zones, setZones] = useState<ZoneFeatureCollection | null>(null);
+  const [point, setPoint] = useState<{ lat: number; lon: number } | null>(null);
+  const [geofence, setGeofence] = useState<GeofenceResponse | null>(null);
+  const [gfLoading, setGfLoading] = useState(false);
+  const [gfError, setGfError] = useState<string | null>(null);
 
   const [selected, setSelected] = useState<string | null>(null);
   const [trace, setTrace] = useState<CellTrace | null>(null);
@@ -27,6 +36,24 @@ export default function Page() {
       .then((t) => { setTimes(t.times); setIndex(Math.max(0, t.times.length - 1)); })
       .catch((e) => setError(`Cannot reach the API: ${e.message}`));
   }, []);
+
+  // Boundaries are static; fetch once. Failure is reported, never faked --
+  // a missing IMBL on the map must not look like an absent IMBL in the water.
+  useEffect(() => {
+    fetchZones().then(setZones).catch((e) =>
+      setError(`Boundaries unavailable: ${e.message}`)
+    );
+  }, []);
+
+  // Every map click is a geofence query for that position.
+  useEffect(() => {
+    if (!point) { setGeofence(null); return; }
+    setGfLoading(true); setGfError(null);
+    fetchGeofence(point.lat, point.lon, 2)
+      .then(setGeofence)
+      .catch((e) => { setGeofence(null); setGfError(e.message); })
+      .finally(() => setGfLoading(false));
+  }, [point]);
 
   // Refetch when the viewport or the time step changes. Debounced because
   // dragging the slider or panning fires continuously.
@@ -55,6 +82,13 @@ export default function Page() {
 
   const onBboxChange = useCallback((b: Bbox) => setBbox(b), []);
   const onCellClick = useCallback((c: string) => setSelected(c), []);
+  const onMapClick = useCallback(
+    (lat: number, lon: number) => setPoint({ lat, lon }), []
+  );
+  const closePanel = useCallback(() => {
+    setSelected(null); setPoint(null); setGeofence(null); setGfError(null);
+  }, []);
+  const panelOpen = point !== null || selected !== null;
 
   return (
     <main className="shell">
@@ -68,9 +102,12 @@ export default function Page() {
 
       <MapView
         data={risk}
+        zones={zones}
         selectedCell={selected}
         onBboxChange={onBboxChange}
         onCellClick={onCellClick}
+        onMapClick={onMapClick}
+        marker={point}
       />
 
       <div className="topbar">
@@ -78,7 +115,9 @@ export default function Page() {
           ORCA <small>marine hazard field · Kerala–Tamil Nadu</small>
         </div>
         <div className="hint">
-          {risk ? `${risk.n_features} cells` : "…"} · click a cell for its trace
+          {risk ? `${risk.n_features} cells` : "…"}
+          {zones ? ` · ${zones.n_features} boundaries` : ""} · click the map for
+          a position check
         </div>
       </div>
 
@@ -93,12 +132,14 @@ export default function Page() {
         servedTime={risk?.valid_time ?? null}
       />
 
-      <TracePanel
-        trace={trace}
-        loading={traceLoading}
-        error={traceError}
-        onClose={() => setSelected(null)}
-      />
+      {panelOpen && (
+        <aside className="panel">
+          <button className="close" onClick={closePanel}>×</button>
+          <h2>Position report</h2>
+          <GeofencePanel geofence={geofence} loading={gfLoading} error={gfError} />
+          <TracePanel trace={trace} loading={traceLoading} error={traceError} />
+        </aside>
+      )}
     </main>
   );
 }

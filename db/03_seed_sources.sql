@@ -22,6 +22,11 @@ INSERT INTO sources (source_id, name, access_mode, reliability, base_url, notes)
   ('incois_pfz',        'INCOIS PFZ Advisory',      'scrape', 0.95,
    'https://incois.gov.in/portal/osf/pfzAdvisory.jsp',
    'Tier 3. No API, bulletin scrape. Authoritative -> high prior.'),
+  ('marine_regions',    'MarineRegions (VLIZ)',     'api',    0.80,
+   'https://geo.vliz.be/geoserver/MarineRegions/wfs',
+   'Tier 1. No key, open WFS. EEZ / territorial sea / treaty boundary lines '
+   'incl. the India-Sri Lanka IMBL. CC-BY 4.0. ADVISORY ONLY: a scientific '
+   'compilation, NOT Survey of India, no legal authority.'),
   ('imd_cyclone',       'IMD Cyclone Bulletin',     'scrape', 0.95,
    'https://mausam.imd.gov.in/responsive/cycloneinformation.php',
    'Tier 3. No API, bulletin scrape. Authoritative -> high prior.')

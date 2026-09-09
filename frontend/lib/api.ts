@@ -1,4 +1,7 @@
-import type { CellTrace, RiskFeatureCollection, RiskTimes } from "./types";
+import type {
+  CellTrace, GeofenceResponse, RiskFeatureCollection, RiskTimes,
+  ZoneFeatureCollection,
+} from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
 
@@ -27,3 +30,8 @@ export const fetchTrace = (cell: string, time?: string) =>
   get<CellTrace>(
     `/api/cells/${cell}/trace` + (time ? `?time=${encodeURIComponent(time)}` : "")
   );
+
+export const fetchGeofence = (lat: number, lon: number, bufferNm = 2) =>
+  get<GeofenceResponse>(`/api/geofence?lat=${lat}&lon=${lon}&buffer_nm=${bufferNm}`);
+
+export const fetchZones = () => get<ZoneFeatureCollection>("/api/zones");
