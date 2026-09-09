@@ -1,0 +1,26 @@
+services:
+  db:
+    image: timescale/timescaledb-ha:pg16
+    container_name: orca-db
+    environment:
+      POSTGRES_USER: orca
+      POSTGRES_PASSWORD: orca
+      POSTGRES_DB: orca
+    ports:
+      - "5432:5432"
+    volumes:
+      # NOTE: this image sets PGDATA=/home/postgres/pgdata/data, NOT the
+      # /var/lib/postgresql/data used by the stock postgres image. Mounting
+      # the stock path here would appear to work but persist nothing.
+      - orca_pgdata:/home/postgres/pgdata/data
+      # Scripts here run once, in filename order, only on an empty volume.
+      - ./db:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orca -d orca"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+volumes:
+  orca_pgdata:

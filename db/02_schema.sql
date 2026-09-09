@@ -1,0 +1,173 @@
+-- ORCA step 1: schema. 9 tables.
+--
+-- Conventions that the rest of the codebase depends on:
+--   * h3_cell is the H3 index as its 15-char hex STRING. This image has no
+--     h3-pg extension, so cells are computed in Python (h3 lib) at the
+--     adapter boundary. Resolution is NOT baked in here -- core/grid.py owns
+--     that choice, so changing resolution never means a migration.
+--   * Every value in observations uses the ONE canonical unit for its
+--     variable -- SI-derived, defined in adapters/base.py CANONICAL_UNITS
+--     (sst is degC and chl is mg/m3 by convention, not K and kg/m3).
+--     Unit conversion is an adapter's job, never core/'s.
+--   * geom is SRID 4326 (WGS84 lon/lat) everywhere.
+
+-- ---------------------------------------------------------------- sources
+-- One row per upstream data source. Static, hand-seeded, small.
+CREATE TABLE IF NOT EXISTS sources (
+    source_id   TEXT PRIMARY KEY,
+    name        TEXT NOT NULL,
+    access_mode TEXT NOT NULL,          -- 'api' | 'scrape'
+    reliability REAL NOT NULL,          -- see COMMENT below
+    base_url    TEXT,
+    notes       TEXT
+);
+
+COMMENT ON COLUMN sources.reliability IS
+  'Per-source prior in [0,1]. core/fusion.py uses this to arbitrate when two '
+  'sources disagree about the same (h3_cell, variable, time bin). It is a '
+  'weight on belief, not an accuracy claim -- a scraped official bulletin '
+  'outranks a modelled API value precisely because it is authoritative.';
+
+-- ------------------------------------------------------------- harbours
+-- Candidate safe-harbour set for core/recall.py and core/routing.py.
+CREATE TABLE IF NOT EXISTS harbours (
+    harbour_id TEXT PRIMARY KEY,
+    name       TEXT NOT NULL,
+    lat        DOUBLE PRECISION NOT NULL,
+    lon        DOUBLE PRECISION NOT NULL,
+    depth_m    DOUBLE PRECISION,        -- limits which vessels can enter (draft_m)
+    capacity   INTEGER,
+    -- Generated, so geom can never drift out of sync with lat/lon.
+    geom       GEOMETRY(Point, 4326)
+               GENERATED ALWAYS AS (ST_SetSRID(ST_MakePoint(lon, lat), 4326)) STORED
+);
+CREATE INDEX IF NOT EXISTS harbours_geom_idx ON harbours USING GIST (geom);
+
+-- -------------------------------------------------------------- vessels
+-- Vessel registry. Static attributes only; positions live in the hypertable.
+CREATE TABLE IF NOT EXISTS vessels (
+    mmsi         TEXT PRIMARY KEY,
+    name         TEXT,
+    vessel_class TEXT,
+    cruise_speed DOUBLE PRECISION,      -- m/s (SI) -- feeds time-to-harbour
+    draft_m      DOUBLE PRECISION,
+    home_harbour TEXT                   -- harbours.harbour_id, intentionally
+                                        -- unconstrained: see note in 03 seed
+);
+
+-- ----------------------------------------------------- vessel_positions
+-- AIS track points. High volume, 30d retention.
+CREATE TABLE IF NOT EXISTS vessel_positions (
+    ts       TIMESTAMPTZ NOT NULL,
+    mmsi     TEXT NOT NULL,             -- deliberately NO FK to vessels: AIS
+                                        -- reports craft we have never seen,
+                                        -- and a FK would drop those rows.
+    lat      DOUBLE PRECISION,
+    lon      DOUBLE PRECISION,
+    sog      DOUBLE PRECISION,          -- speed over ground, m/s (SI)
+    cog      DOUBLE PRECISION,          -- course over ground, degrees true
+    h3_cell  TEXT,
+    geom     GEOMETRY(Point, 4326)
+             GENERATED ALWAYS AS (ST_SetSRID(ST_MakePoint(lon, lat), 4326)) STORED,
+    -- Idempotent ingest: one position per vessel per instant.
+    CONSTRAINT vessel_positions_uniq UNIQUE (mmsi, ts)
+);
+
+-- --------------------------------------------------------- hazard_zones
+-- Static/slow polygons: restricted areas, reefs, declared cyclone zones.
+CREATE TABLE IF NOT EXISTS hazard_zones (
+    zone_id   TEXT PRIMARY KEY,
+    zone_type TEXT NOT NULL,
+    name      TEXT,
+    geom      GEOMETRY(Polygon, 4326) NOT NULL
+);
+CREATE INDEX IF NOT EXISTS hazard_zones_geom_idx ON hazard_zones USING GIST (geom);
+
+-- --------------------------------------------------------- observations
+-- The single normalized shape every adapter writes into. Zero computation
+-- happens on the way in. This is the input side of core/fusion.py.
+CREATE TABLE IF NOT EXISTS observations (
+    valid_time  TIMESTAMPTZ NOT NULL,   -- when the observation/forecast APPLIES
+    issued_time TIMESTAMPTZ,            -- when the source PUBLISHED it.
+                                        -- (valid_time - issued_time) is the
+                                        -- data-age reported in traces.
+    h3_cell     TEXT NOT NULL,
+    variable    TEXT NOT NULL,          -- e.g. 'wave_height', 'wind_speed', 'sst'
+    value       DOUBLE PRECISION,
+    unit        TEXT,                   -- canonical unit for this variable;
+                                        -- stored for provenance. Enforced at
+                                        -- ingest by the Observation contract.
+    source_id   TEXT REFERENCES sources(source_id),
+    confidence  REAL,
+    geom        GEOMETRY(Point, 4326),  -- RAW sample location from the source,
+                                        -- not the cell centroid. h3_cell already
+                                        -- carries the cell, and this table has no
+                                        -- lat/lon columns -- so storing the
+                                        -- centroid here would discard the true
+                                        -- position permanently.
+    -- Idempotent ingest: re-running a fetch overwrites rather than duplicates.
+    CONSTRAINT observations_uniq UNIQUE (source_id, h3_cell, variable, valid_time)
+);
+
+-- ----------------------------------------------------------- risk_cells
+-- Output of core/risk.py: exceedance probability per cell per time step.
+CREATE TABLE IF NOT EXISTS risk_cells (
+    valid_time  TIMESTAMPTZ NOT NULL,
+    h3_cell     TEXT NOT NULL,
+    hazard_prob REAL,                   -- P(threshold exceeded), NOT a score
+    uncertainty REAL,                   -- spread of the forecast ensemble
+    drivers     JSONB,                  -- which variables/sources drove it,
+                                        -- so the trace can explain the number
+    PRIMARY KEY (valid_time, h3_cell)
+);
+
+-- ------------------------------------------------------ advisory_chunks
+-- Chunked text of scraped bulletins (INCOIS PFZ, IMD cyclone) for retrieval.
+CREATE TABLE IF NOT EXISTS advisory_chunks (
+    chunk_id    BIGSERIAL PRIMARY KEY,
+    source_id   TEXT REFERENCES sources(source_id),
+    issued_time TIMESTAMPTZ,
+    content     TEXT NOT NULL,
+    embedding   VECTOR(1024)
+    -- No ANN index yet: the operator class depends on cosine vs L2, which is
+    -- decided when the first embeddings land. Exact search is fine until then.
+);
+
+-- --------------------------------------------------------------- traces
+-- The audit record enforcing the hard rule: every number an agent utters is
+-- recorded here with the core/ function that produced it, its source id and
+-- its data-age.
+CREATE TABLE IF NOT EXISTS traces (
+    trace_id     BIGSERIAL PRIMARY KEY,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    user_query   TEXT,
+    steps        JSONB,
+    final_answer TEXT
+);
+
+-- ===================================================== hypertables ======
+-- Partition the three high-volume time-series tables. Timescale requires the
+-- partitioning column to appear in every unique index, which is why the
+-- constraints above all include valid_time / ts.
+SELECT create_hypertable('observations',     'valid_time', if_not_exists => TRUE);
+SELECT create_hypertable('vessel_positions', 'ts',         if_not_exists => TRUE);
+SELECT create_hypertable('risk_cells',       'valid_time', if_not_exists => TRUE);
+
+-- ========================================================= indexes ======
+-- The hot read path: "latest value of variable V in cell C".
+CREATE INDEX IF NOT EXISTS observations_cell_var_time_idx
+    ON observations (h3_cell, variable, valid_time DESC);
+CREATE INDEX IF NOT EXISTS observations_geom_idx
+    ON observations USING GIST (geom);
+
+CREATE INDEX IF NOT EXISTS vessel_positions_mmsi_time_idx
+    ON vessel_positions (mmsi, ts DESC);
+CREATE INDEX IF NOT EXISTS vessel_positions_geom_idx
+    ON vessel_positions USING GIST (geom);
+
+-- ======================================================= retention ======
+-- Drop raw rows older than 30 days. No rollup: continuous aggregates for
+-- longer history are a later step, deliberately not part of step 1.
+SELECT add_retention_policy('observations',     INTERVAL '30 days', if_not_exists => TRUE);
+SELECT add_retention_policy('vessel_positions', INTERVAL '30 days', if_not_exists => TRUE);
+SELECT add_retention_policy('risk_cells',       INTERVAL '30 days', if_not_exists => TRUE);
