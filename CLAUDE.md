@@ -32,21 +32,33 @@ docs is either a negation or a production-roadmap reference. Keep it that way.
 band is `UNKNOWN`, not `SAFE`. A score of 0 means "no hazard in the data we have", which is not
 "it is safe".
 
-**6. The streaming trace is the differentiator.** Events stream progressively via SSE from an
+**6. GDACS is never labelled an IMD alert.** GDACS aggregates NOAA/NHC and JTWC (verified:
+every North Indian Ocean event carries `source: "JTWC"`). The official authority for the North
+Indian Ocean is RSMC New Delhi (IMD). Show the GDACS track as the machine-readable feed, always
+beside a link to the IMD RSMC bulletin, and always with the GDACS attribution string. Enforced
+in `src/lib/cyclone.ts`, the triage API response and `RecallPanel.tsx`.
+
+**7. Fleet positions are simulated and must stay labelled.** No public AIS feed exists for
+sub-20 m Indian fishing vessels. `src/lib/fleet.ts` is synthetic; everything the solver does with
+those positions is real. Never present the fleet as live vessel tracking.
+
+**8. The streaming trace is the differentiator.** Events stream progressively via SSE from an
 async generator. Never batch them. `uiPaceMs` delays *display* only — every trace card must
 keep reporting its own real measured duration.
 
 ## Layout
 
 ```
-src/agents/      planner · geospatial · ocean · weather · route · risk · synthesis · orchestrator
+src/agents/      planner · geospatial · ocean · weather · route · risk · triage
+                 synthesis · orchestrator
 src/lib/         types · layers · geo · net · cache · time · series · provenance
-                 llm · i18n · lang · scenarios · snapshots
-src/app/api/     query (SSE) · layers · alerts · reset
+                 llm · i18n · lang · scenarios · snapshots · cyclone · fleet
+src/app/api/     query (SSE) · layers · alerts · triage · reset
 src/components/  Orca · ConversationPane · TracePane · MapPane · LeafletMap
-                 RiskGauge · AlertsPanel · ProvenanceChip
+                 RiskGauge · AlertsPanel · RecallPanel · ProvenanceChip
 src/locales/     en · hi · ta · bn · ml · te
-data/            harbours · pfz-zones · imbl · mpa · coastline · eez · snapshots/
+data/            harbours · pfz-zones · imbl · mpa · coastline · eez
+                 snapshots/ · cyclones/
 scripts/         generate-layers.mjs
 docs/            ORCA-Technical-Report.md / .pdf
 ```

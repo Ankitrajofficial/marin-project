@@ -24,6 +24,7 @@ export type AgentName =
   | "geospatial"
   | "risk"
   | "route"
+  | "triage"
   | "synthesis";
 
 export type ToolStatus = "ok" | "error" | "timeout" | "cache" | "fallback";

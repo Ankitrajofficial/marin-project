@@ -6,6 +6,7 @@ import TracePane, { type TraceStep } from "./TracePane";
 import MapPane from "./MapPane";
 import RiskGauge from "./RiskGauge";
 import AlertsPanel from "./AlertsPanel";
+import RecallPanel from "./RecallPanel";
 import { t } from "@/lib/i18n";
 import { getScenario } from "@/lib/scenarios";
 import type { AnswerPayload, Lang, MapPayload, QueryPlan, RiskData, StreamEvent } from "@/lib/types";
@@ -32,7 +33,7 @@ export default function Orca() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [run, setRun] = useState<RunState>(EMPTY);
   const [busy, setBusy] = useState(false);
-  const [showAlerts, setShowAlerts] = useState(false);
+  const [rightPane, setRightPane] = useState<"risk" | "alerts" | "recall">("risk");
   const abortRef = useRef<AbortController | null>(null);
 
   const ask = useCallback(
@@ -247,13 +248,24 @@ export default function Orca() {
           >
             CACHED: PFZ · boundaries · MPA
           </span>
-          <button
-            onClick={() => setShowAlerts((v) => !v)}
-            className="rounded-md px-2.5 py-1 text-[12px] transition-colors hover:bg-white/5"
-            style={{ border: "1px solid var(--line)", color: showAlerts ? "var(--accent)" : "var(--text-dim)" }}
-          >
-            {t(lang, "alerts.title")}
-          </button>
+          <div className="flex items-center gap-1 rounded-md p-[2px]" style={{ border: "1px solid var(--line)" }}>
+            {([["risk", t(lang, "panes.risk")], ["alerts", t(lang, "alerts.title")], ["recall", "Recall triage"]] as const).map(
+              ([k, label]) => (
+                <button
+                  key={k}
+                  onClick={() => setRightPane(k)}
+                  className="rounded px-2 py-[3px] text-[11.5px] transition-colors"
+                  style={
+                    rightPane === k
+                      ? { background: "var(--accent)", color: "#04121c", fontWeight: 600 }
+                      : { color: "var(--text-dim)" }
+                  }
+                >
+                  {label}
+                </button>
+              ),
+            )}
+          </div>
         </div>
       </header>
 
@@ -297,7 +309,13 @@ export default function Orca() {
             className="min-h-0 flex-1 overflow-y-auto border-t"
             style={{ borderColor: "var(--line)", background: "var(--panel)" }}
           >
-            {showAlerts ? <AlertsPanel lang={lang} /> : <RiskGauge risk={run.risk} lang={lang} />}
+            {rightPane === "alerts" ? (
+              <AlertsPanel lang={lang} />
+            ) : rightPane === "recall" ? (
+              <RecallPanel lang={lang} />
+            ) : (
+              <RiskGauge risk={run.risk} lang={lang} />
+            )}
           </div>
         </section>
       </div>

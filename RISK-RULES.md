@@ -119,3 +119,117 @@ version string (`orca-deterministic-rules-v1`) with every assessment.
 Edit `THRESHOLDS` in `src/agents/risk.ts`, update the row above, and bump `ENGINE_VERSION`.
 The version travels with every answer and appears in the UI, so an assessment can always be
 traced back to the rule set that produced it.
+
+---
+
+# Vessel recall triage
+
+Solver: `orca-triage-solver-v1` · Source: [`src/agents/triage.ts`](src/agents/triage.ts),
+[`src/lib/cyclone.ts`](src/lib/cyclone.ts)
+
+Deterministic, like the hazard engine. No language model touches any number here.
+
+## The quantity being optimised
+
+```
+margin = time_until_damaging_wind_reaches_the_vessel
+       − time_the_vessel_needs_to_reach_a_safe_harbour
+```
+
+Recall order is ascending margin. This is not the same as distance-to-storm: a slow boat far
+from the storm with no harbour to run to is in more danger than a fast boat close to it sitting
+next to a harbour.
+
+## Priority grouping
+
+Margin alone is undefined for two real cases, so results are grouped before being ordered.
+No sentinel values.
+
+| Group | Case | Ordered by |
+|---|---|---|
+| 0 | Already inside the damaging-wind radius | immediate — distress response, not recall |
+| 1 | Cannot reach **any** harbour in time | soonest hazard arrival (rescue window) |
+| 2 | Can reach a harbour | smallest margin (tightest recall) |
+| 3 | Storm never reaches them on this track | closest approach |
+
+## Damaging-wind radius by intensity
+
+The gale-force (≥ 60 km/h) footprint, which is the band that capsizes an open boat, not the eye.
+
+| Max sustained wind | Radius | Class |
+|---|---|---|
+| ≥ 165 km/h | 200 nm | Very Severe Cyclonic Storm |
+| ≥ 120 km/h | 160 nm | Severe Cyclonic Storm |
+| ≥ 88 km/h | 130 nm | Cyclonic Storm |
+| ≥ 62 km/h | 100 nm | Deep Depression |
+| < 62 km/h | 80 nm | Depression |
+
+Deliberately parametric. GDACS publishes wind-radii polygons per advisory but only sparsely
+(Cyclone Dana episode 8 carries one per band for the whole event), so a documented radius beats
+interpolating a single polygon across three days.
+
+Arrival time is computed by walking the timestamped track and linearly interpolating within the
+segment where distance-to-centre crosses the radius, giving sub-6-hour resolution from
+6-hourly advisory points.
+
+## Sea-state derating of vessel speed
+
+A small boat punching into a head sea cannot make its rated cruise speed; the skipper throttles
+back against slamming. Applied multiplicatively.
+
+| Significant wave height | Factor | Condition |
+|---|---|---|
+| ≥ 4.0 m | 0.35 | very rough, barely able to make way |
+| ≥ 3.0 m | 0.50 | rough, heavy slamming |
+| ≥ 2.0 m | 0.65 | moderate-rough, throttled back |
+| ≥ 1.5 m | 0.80 | moderate |
+| < 1.5 m | 1.00 | slight |
+
+Sea state is sampled at the **decision time**, not the storm peak, because that is what governs
+the run home. For a replay this comes from the real archived wave reanalysis for that date.
+
+## Triage bands
+
+| Margin | Band |
+|---|---|
+| already exposed | `CRITICAL` |
+| < 2 h | `CRITICAL` |
+| < 6 h | `URGENT` |
+| < 12 h | `WATCH` |
+| ≥ 12 h, or storm never arrives | `CLEAR` |
+
+A **safety factor of 1 h** is added to every run time before a harbour is called reachable.
+
+## Harbour selection
+
+Every harbour in the gazetteer is evaluated for every vessel, not just the nearest, because the
+shortest run can head into the storm. A harbour is eligible only if the run fits inside **both**
+the vessel's own exposure window **and** the harbour's, with the safety factor applied.
+
+### Measured result: diversion almost never helps
+
+Across every advisory timestamp of Cyclone Dana with a 250-vessel fleet, **zero** vessels
+benefited from diverting to a harbour other than their nearest.
+
+That is a finding, not a disabled feature. At 2–5 kn effective speed in 3–4 m seas, a boat whose
+nearest harbour is inside the storm window cannot reach a farther one either. The decision is
+**go now or do not go**, not choose-another-harbour. The logic stays because it will fire for
+faster vessels and weaker systems.
+
+## Measured result: the cost of deciding late
+
+Same fleet, same storm, solved at every advisory. Cyclone Dana, 250 simulated vessels,
+160 nm damaging-wind radius:
+
+| Decision time | Boats with no reachable harbour |
+|---|---|
+| T−42 h | **20** |
+| T−36 h | 36 |
+| T−30 h | 60 |
+| T−24 h | 82 |
+| T−18 h | **91** |
+| T−12 h | 91 |
+| T−0 h (landfall) | 91 |
+
+**Waiting from T−42 h to T−18 h strands 71 more boats.** This is the single most useful number
+the system produces, and it converts "issue the recall early" from advice into a quantity.

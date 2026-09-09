@@ -175,3 +175,78 @@ wins over detection, because the user chose it.
 - **No test suite.** Verification was done by running all six scenarios plus eight failure
   modes end to end against the live server. For a two-day prototype that found more real bugs
   per minute than unit tests would have — including the `SAFE`-without-data bug.
+
+---
+
+## Disaster Management pivot: vessel recall triage
+
+**The centre of the system moved from fishing advisory to boats at sea during a cyclone.**
+A conversational PFZ advisory is a fishing product. A prioritised recall list is a Disaster
+Management product, which is the theme this entry is submitted under. The solver is
+`src/agents/triage.ts`.
+
+### GDACS is not IMD — this rule must survive future edits
+
+GDACS aggregates **NOAA/NHC and JTWC** advisories. Verified empirically: every North Indian
+Ocean event returned by the GDACS API carries `source: "JTWC"`.
+
+For the North Indian Ocean the official authority is **RSMC New Delhi (IMD)**, which issues a
+Tropical Weather Outlook daily at 0600 UTC plus an additional bulletin at 1700 UTC when a
+depression is forming.
+
+Therefore, everywhere cyclone data appears:
+- the GDACS track is presented as the **machine-readable feed**
+- a prominent link to the current IMD RSMC bulletin is shown beside it, labelled
+  **"Official advisory — IMD RSMC New Delhi"**
+- **GDACS output is never labelled an IMD alert**
+- the attribution string "Global Disaster Alert and Coordination System, GDACS" is displayed
+  wherever the data is used
+
+This is enforced in `src/lib/cyclone.ts` (`cycloneProvenance`), in the API response
+(`cyclone.officialAuthority`) and in `RecallPanel.tsx`. Do not remove it.
+
+### The fleet is simulated, and that is the honest answer
+
+There is no public position feed for sub-20 m Indian fishing vessels, because most carry no AIS
+transponder — AIS is mandatory for larger vessels, not for the open and half-decked boats that
+make up the bulk of the fleet. No dataset exists to fetch, and anyone claiming a live one for
+this class of boat is wrong.
+
+That absence is the problem the deck proposes to solve: in production the recall list is driven
+by last-known position from state fisheries registration, plus VHF check-in, plus the
+transponder rollout — which coastal authorities already partially hold.
+
+So `src/lib/fleet.ts` generates positions from a seeded PRNG and every surface labels them
+**SIMULATED**. Everything the solver does with those positions is real: the cyclone track, the
+harbour set, the geodesy, the sea state and the hazard timing. Swap the module for a registry
+query and nothing downstream changes.
+
+### Design decisions inside the solver
+
+**No sentinel margins.** An earlier version scored unreachable vessels as `−999` so they would
+sort first. That destroyed the ordering *within* the unreachable group, which is exactly the
+group a rescue coordinator cares most about. Replaced with an explicit priority grouping where
+each group has its own meaningful urgency measure.
+
+**Decision time defaults to the first advisory, not landfall.** The initial build defaulted to
+the storm's current-position timestamp, which for a replay is landfall — by which point the
+answer is "everyone is stranded" and the demo shows a flat wall. Recall orders are issued 24–48 h
+out. `?at=` walks the storm in so the list can be watched tightening.
+
+**Sea state at decision time, not storm peak.** Using the 4.18 m peak to derate speed at T−42 h
+over-penalised every vessel. The solver now samples the real archived sea state for the decision
+date.
+
+**Landfall is defined as the track advisory closest to the coastline**, not by matching the
+GDACS current-position coordinate. Coordinate matching silently failed and put landfall 36 h
+late; distance-to-coastline is both robust and the physically meaningful definition.
+
+**Every harbour is evaluated, not just the nearest.** See RISK-RULES.md for the measured finding
+that diversion almost never helps at small-boat speeds, which is a more interesting result than
+a contrived diversion would have been.
+
+### What this replaces in the deck
+
+The deck said "safe routes" with no method. The triage solver is a stated method with documented
+thresholds, and the recall timing curve is a quantified result: **waiting from T−42 h to T−18 h
+strands 71 more boats out of 250.**

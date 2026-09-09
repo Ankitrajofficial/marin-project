@@ -21,6 +21,7 @@ const AGENT_META: Record<AgentName, { label: string; glyph: string; color: strin
   weather: { label: "Weather", glyph: "☁", color: "#60a5fa" },
   route: { label: "Route", glyph: "⤳", color: "#f0abfc" },
   risk: { label: "Risk", glyph: "▲", color: "#fbbf24" },
+  triage: { label: "Triage", glyph: "⚑", color: "#fb7185" },
   synthesis: { label: "Synthesis", glyph: "✦", color: "#34d399" },
 };
 
