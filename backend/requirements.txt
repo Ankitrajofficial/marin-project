@@ -20,5 +20,6 @@ geopandas>=1.0             # vector geometry off the DB (pulls shapely, pyproj,
                            # pyogrio -- transitive, not pinned here until core/
                            # imports one of them directly)
 
-# Nothing that fetches is listed yet -- httpx arrives with the first real
-# adapter in step 3, deliberately, so the list tracks the build order.
+# --- transport, for adapters/ (step 3 onward) -------------------------------
+httpx>=0.27                # async HTTP. Open-Meteo batches many points per
+                           # request, so adapters issue few, concurrent calls.

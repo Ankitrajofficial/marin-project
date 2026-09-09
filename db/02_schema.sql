@@ -5,6 +5,8 @@
 --     h3-pg extension, so cells are computed in Python (h3 lib) at the
 --     adapter boundary. Resolution is NOT baked in here -- core/grid.py owns
 --     that choice, so changing resolution never means a migration.
+--   * issued_time is only interpretable together with issued_time_kind.
+--     Never compare data-age across sources without checking it.
 --   * Every value in observations uses the ONE canonical unit for its
 --     variable -- SI-derived, defined in adapters/base.py CANONICAL_UNITS
 --     (sst is degC and chl is mg/m3 by convention, not K and kg/m3).
@@ -88,9 +90,27 @@ CREATE INDEX IF NOT EXISTS hazard_zones_geom_idx ON hazard_zones USING GIST (geo
 -- happens on the way in. This is the input side of core/fusion.py.
 CREATE TABLE IF NOT EXISTS observations (
     valid_time  TIMESTAMPTZ NOT NULL,   -- when the observation/forecast APPLIES
-    issued_time TIMESTAMPTZ,            -- when the source PUBLISHED it.
-                                        -- (valid_time - issued_time) is the
-                                        -- data-age reported in traces.
+    issued_time TIMESTAMPTZ,            -- when this value was ISSUED. What that
+                                        -- means depends on issued_time_kind --
+                                        -- read that before doing arithmetic
+                                        -- with this column.
+    issued_time_kind TEXT,              -- 'model_run'   real initialization time
+                                        --               from the source
+                                        -- 'fetch_proxy' wall-clock time WE
+                                        --               retrieved it, because
+                                        --               the source exposes no
+                                        --               run time. An UPPER BOUND
+                                        --               on data age, not the
+                                        --               true age.
+                                        -- core/fusion.py compares data-age
+                                        -- ACROSS sources, so it must branch on
+                                        -- this rather than assume both mean the
+                                        -- same thing. Open-Meteo has no run time
+                                        -- in its response (verified: no body
+                                        -- field, no header); Copernicus and IMD
+                                        -- do. Without this column that
+                                        -- difference would be invisible at the
+                                        -- point where it matters.
     h3_cell     TEXT NOT NULL,
     variable    TEXT NOT NULL,          -- e.g. 'wave_height', 'wind_speed', 'sst'
     value       DOUBLE PRECISION,
@@ -106,7 +126,14 @@ CREATE TABLE IF NOT EXISTS observations (
                                         -- centroid here would discard the true
                                         -- position permanently.
     -- Idempotent ingest: re-running a fetch overwrites rather than duplicates.
-    CONSTRAINT observations_uniq UNIQUE (source_id, h3_cell, variable, valid_time)
+    CONSTRAINT observations_uniq UNIQUE (source_id, h3_cell, variable, valid_time),
+    CONSTRAINT observations_issued_kind_valid
+        CHECK (issued_time_kind IN ('model_run', 'fetch_proxy')),
+    -- A timestamp without its kind is unusable (you cannot tell a real issue
+    -- time from a fetch proxy), and a kind without a timestamp is meaningless.
+    -- They travel together or not at all.
+    CONSTRAINT observations_issued_paired
+        CHECK ((issued_time IS NULL) = (issued_time_kind IS NULL))
 );
 
 -- ----------------------------------------------------------- risk_cells

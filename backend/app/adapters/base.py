@@ -37,6 +37,32 @@ log = logging.getLogger(__name__)
 INSERT_BATCH_SIZE = 1000
 
 
+class IssuedTimeKind(str, Enum):
+    """What an Observation's issued_time actually MEANS.
+
+    Two sources can both populate issued_time and mean entirely different
+    things by it, and the difference is invisible in the value itself:
+
+      MODEL_RUN    the source told us when its model was initialized. The real
+                   thing. Copernicus and IMD carry this.
+
+      FETCH_PROXY  the source exposes no run time at all, so this is the
+                   wall-clock moment WE retrieved it. It is an UPPER BOUND on
+                   data age -- the data is at least this fresh and probably
+                   staler, by however long the source sat on it before we
+                   asked. Open-Meteo is this: its response carries no
+                   initialization time in any body field or header (verified
+                   by probe, not assumed).
+
+    This is a column, not a comment, because core/fusion.py compares data-age
+    ACROSS sources to arbitrate conflicts. A prose note in one adapter is not
+    in scope at the point where that comparison happens; a field is.
+    """
+
+    MODEL_RUN = "model_run"
+    FETCH_PROXY = "fetch_proxy"
+
+
 class Variable(str, Enum):
     """Canonical variable names. An adapter maps its source's naming onto
     these; nothing downstream ever sees a source-specific name.
@@ -129,9 +155,10 @@ class Observation(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid", use_enum_values=False)
 
     valid_time: datetime      # when the observation/forecast APPLIES
-    issued_time: datetime | None = None  # when the source PUBLISHED it.
-                                         # (now - issued_time) is the data-age
-                                         # that every trace has to report.
+    # issued_time is only interpretable together with issued_time_kind.
+    # Never do data-age arithmetic with one and not the other.
+    issued_time: datetime | None = None
+    issued_time_kind: IssuedTimeKind | None = None
     lat: float
     lon: float
     variable: Variable
@@ -207,6 +234,22 @@ class Observation(BaseModel):
         return v
 
     @model_validator(mode="after")
+    def _check_issued_pairing(self) -> Observation:
+        """issued_time and its kind travel together or not at all.
+
+        A timestamp without its kind cannot be told apart from a real issue
+        time downstream, which is the precise confusion this field exists to
+        prevent. Mirrors the observations_issued_paired CHECK constraint.
+        """
+        if (self.issued_time is None) != (self.issued_time_kind is None):
+            raise ValueError(
+                "issued_time and issued_time_kind must both be set or both be "
+                "None; got issued_time="
+                f"{self.issued_time!r}, issued_time_kind={self.issued_time_kind!r}"
+            )
+        return self
+
+    @model_validator(mode="after")
     def _check_unit_and_range(self) -> Observation:
         """The two checks this whole contract exists for."""
         expected = CANONICAL_UNITS[self.variable]
@@ -228,9 +271,12 @@ class Observation(BaseModel):
 
     # -- helpers ------------------------------------------------------------
     def age_seconds(self, now: datetime | None = None) -> float | None:
-        """Seconds since the source published this, or None if unknown.
+        """Seconds since issued_time, or None if unknown.
 
-        The data-age that every trace has to report alongside the number.
+        The data-age every trace has to report alongside the number. Read this
+        WITH issued_time_kind: when the kind is FETCH_PROXY the result is a
+        lower bound on true age (the source may have been sitting on the value
+        long before we fetched it), not the age itself.
         """
         if self.issued_time is None:
             return None
@@ -247,12 +293,13 @@ class Observation(BaseModel):
 # forecast window updates in place instead of duplicating.
 _INSERT_SQL = """
 INSERT INTO observations
-    (valid_time, issued_time, h3_cell, variable, value, unit,
+    (valid_time, issued_time, issued_time_kind, h3_cell, variable, value, unit,
      source_id, confidence, geom)
 VALUES
-    (%s, %s, %s, %s, %s, %s, %s, %s, ST_SetSRID(ST_MakePoint(%s, %s), 4326))
+    (%s, %s, %s, %s, %s, %s, %s, %s, %s, ST_SetSRID(ST_MakePoint(%s, %s), 4326))
 ON CONFLICT (source_id, h3_cell, variable, valid_time) DO UPDATE SET
-    issued_time = EXCLUDED.issued_time,
+    issued_time      = EXCLUDED.issued_time,
+    issued_time_kind = EXCLUDED.issued_time_kind,
     value       = EXCLUDED.value,
     unit        = EXCLUDED.unit,
     confidence  = EXCLUDED.confidence,
@@ -264,6 +311,7 @@ def _as_row(obs: Observation) -> tuple[Any, ...]:
     return (
         obs.valid_time,
         obs.issued_time,
+        obs.issued_time_kind.value if obs.issued_time_kind else None,
         obs.h3_cell,
         obs.variable.value,
         obs.value,
@@ -280,6 +328,29 @@ def _batched(seq: Sequence[Observation], n: int) -> Iterator[Sequence[Observatio
         yield seq[i : i + n]
 
 
+_RELIABILITY_SQL = "SELECT reliability FROM sources WHERE source_id = %s"
+
+
+async def fetch_reliability(source_id: str) -> float:
+    """Read a source's reliability prior from the sources table.
+
+    Lives here rather than inside Adapter so that normalize() stays a pure
+    function: the ingest job calls this once and passes the value into the
+    adapter's constructor, instead of the adapter reaching for the database
+    mid-translation.
+    """
+    async with get_conn() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(_RELIABILITY_SQL, (source_id,))
+            row = await cur.fetchone()
+    if row is None:
+        raise LookupError(
+            f"source_id {source_id!r} is not in the sources table. Seed it in "
+            f"db/03_seed_sources.sql -- the FK on observations will reject it."
+        )
+    return float(row[0])
+
+
 class Adapter(ABC):
     """Base class for every source translator.
 
@@ -291,12 +362,27 @@ class Adapter(ABC):
     #: Must match a sources.source_id row seeded in db/03_seed_sources.sql.
     source_id: ClassVar[str]
 
-    def __init_subclass__(cls, **kwargs: Any) -> None:
+    def __init_subclass__(cls, *, abstract: bool = False, **kwargs: Any) -> None:
+        """Catch a missing source_id when the class is DEFINED, not when an
+        ingest job dies against a foreign key.
+
+        Intermediate bases that share request logic between several real
+        adapters have no source_id of their own and opt out explicitly:
+
+            class _OpenMeteoAdapter(Adapter, abstract=True): ...
+
+        The opt-out is a keyword rather than a name convention or an
+        __abstractmethods__ check, because such a base implements fetch() and
+        normalize() -- so it looks concrete to abc and would slip through.
+        """
         super().__init_subclass__(**kwargs)
-        # Catch a missing source_id when the class is defined, not when an
-        # ingest job fails at 3am against a foreign key.
-        if not getattr(cls, "source_id", None) and not getattr(cls, "__abstractmethods__", None):
-            raise TypeError(f"{cls.__name__} must set a class-level source_id")
+        cls._is_abstract = abstract
+        if not abstract and not getattr(cls, "source_id", None):
+            raise TypeError(
+                f"{cls.__name__} must set a class-level source_id matching a "
+                f"row in the sources table, or pass abstract=True if it is a "
+                f"shared base rather than a real adapter."
+            )
 
     @abstractmethod
     async def fetch(self) -> Any:
@@ -315,12 +401,23 @@ class Adapter(ABC):
         """
 
     async def run(self) -> int:
-        """fetch -> normalize -> validate -> upsert. Returns rows written."""
-        raw = await self.fetch()
-        observations = self.normalize(raw)
+        """fetch -> normalize -> write. Returns rows written.
 
+        Do not override: this is what guarantees everything reaching the table
+        went through the same contract.
+        """
+        raw = await self.fetch()
+        return await self.write(self.normalize(raw))
+
+    async def write(self, observations: Sequence[Observation]) -> int:
+        """Upsert already-normalized observations. Returns rows written.
+
+        Split out of run() so a caller that wants to inspect or report on the
+        observations before they land (an ingest job tallying per variable,
+        say) can do so without fetching twice.
+        """
         if not observations:
-            log.warning("%s: normalize() produced no observations", self.source_id)
+            log.warning("%s: nothing to write", self.source_id)
             return 0
 
         # An adapter must not write under another source's id: the whole
