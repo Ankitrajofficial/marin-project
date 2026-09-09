@@ -23,6 +23,16 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 H3_RESOLUTION = 5
 
 
+# Source ids that carry SIMULATED data rather than observations of the real
+# world. Anything computed from one of these is flagged simulated all the way
+# out to the API, so it can never be presented as a real forecast.
+#
+# A frozenset in config rather than a literal in core/ because the guard has to
+# be checked in several places and one of them silently disagreeing is exactly
+# the failure this prevents.
+SCENARIO_SOURCE_IDS: frozenset[str] = frozenset({"scenario_sim"})
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",

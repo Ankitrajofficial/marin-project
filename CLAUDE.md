@@ -17,6 +17,34 @@ deterministic solver in backend/app/core/. The LLM only picks which core
 function to call, and reads the result back in plain language. Every
 number is logged in `traces` with its source id and data-age.
 
+## Scenario data (cyclone demo) — not built yet, build it this way
+Synthetic data lives in backend/app/scenarios/, never in core/ and never in
+adapters/. It writes into observations under source_id 'scenario_sim'.
+core/ stays untouched and cannot tell scenario rows from real ones except by
+source_id, which is exactly the point.
+
+Reliability 0.90, NOT 0.0. Reliability answers "how much do I believe this
+source about the real world"; a scenario's job is to REPLACE the real world.
+Different axes. At 0.0 the reliability-weighted fusion gives scenario rows
+zero weight, so an injected cyclone sitting alongside real calm data
+contributes nothing and the hazard field stays calm — the demo silently
+shows no storm. Visibility comes from source_id in the trace, not from
+down-weighting.
+
+Within a scenario the simulated world is the only world: the scenario path
+MASKS overlapping real observations for its window and AOI. Never blend a
+real calm sea with an injected cyclone — a half-real half-simulated hazard
+field is not a forecast of anything.
+
+It must not be reachable from the normal ingest path: no scenario import in
+jobs/ingest_*.py, no flag on a real adapter.
+
+Hard guard, already enforced in core/risk.py: any risk_cells row whose
+inputs include a scenario source is written with simulated = true, and the
+same must hold for traces. The API must surface that flag on every response
+that carries a simulated number, so the frontend can badge it. A simulated
+result must never be presentable as a real forecast.
+
 ## Layers (data flows bottom-up)
 1. adapters/ — one translator per source. Fetch, normalize into ONE
    Observation shape, insert. Zero computation here.

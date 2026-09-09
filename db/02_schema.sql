@@ -145,6 +145,13 @@ CREATE TABLE IF NOT EXISTS risk_cells (
     uncertainty REAL,                   -- spread of the forecast ensemble
     drivers     JSONB,                  -- which variables/sources drove it,
                                         -- so the trace can explain the number
+    -- HARD GUARD. True if ANY observation feeding this cell came from a
+    -- scenario source (see config.SCENARIO_SOURCE_IDS). A simulated number
+    -- must never be presentable as a real forecast, so the flag is a column
+    -- rather than a key inside drivers: NOT NULL means core/ has to decide it
+    -- explicitly, and an API handler cannot forget to select it the way it can
+    -- forget a nested JSON field.
+    simulated   BOOLEAN NOT NULL DEFAULT false,
     PRIMARY KEY (valid_time, h3_cell)
 );
 
@@ -169,7 +176,10 @@ CREATE TABLE IF NOT EXISTS traces (
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
     user_query   TEXT,
     steps        JSONB,
-    final_answer TEXT
+    final_answer TEXT,
+    -- Same guard as risk_cells.simulated: if any number in this trace came
+    -- from scenario data, the whole trace is simulated and the API says so.
+    simulated    BOOLEAN NOT NULL DEFAULT false
 );
 
 -- ===================================================== hypertables ======
@@ -191,6 +201,11 @@ CREATE INDEX IF NOT EXISTS vessel_positions_mmsi_time_idx
     ON vessel_positions (mmsi, ts DESC);
 CREATE INDEX IF NOT EXISTS vessel_positions_geom_idx
     ON vessel_positions USING GIST (geom);
+
+-- Partial index: the common query is "real forecasts only", and simulated
+-- rows are rare, so indexing the exception keeps it small.
+CREATE INDEX IF NOT EXISTS risk_cells_simulated_idx
+    ON risk_cells (valid_time DESC) WHERE simulated;
 
 -- ======================================================= retention ======
 -- Drop raw rows older than 30 days. No rollup: continuous aggregates for
