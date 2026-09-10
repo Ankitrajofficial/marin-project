@@ -26,8 +26,27 @@ const EMPTY: RiskFeatureCollection = {
 };
 
 // Kerala -> Tamil Nadu coast.
-const INITIAL_CENTER: [number, number] = [78.4, 10.4];
-const INITIAL_ZOOM = 6.1;
+//
+// Bounds, not a centre and a zoom. A fixed zoom frames a different area on
+// every screen: on a wide monitor 6.1 reached past the Andamans to Myanmar,
+// water this system holds no data for and makes no claim about. Framing by
+// bounds shows the SAME area everywhere and lets the viewport pick the zoom.
+//
+// Matches the extent of what is actually ingested (app/aoi.py spans lat
+// 8.1-12.9, lon 74.8-80.5; observations reach lat 7.0-13.9, lon 74.0-82.5),
+// with a small margin so coastal cells are not flush against the edge.
+export const AOI_BOUNDS: [[number, number], [number, number]] =
+  [[73.2, 6.4], [82.9, 14.4]];
+
+// How far the user may roam. Generous enough to see context around the AOI,
+// tight enough that the Andamans (~92E) and Myanmar (~95E) stay off screen:
+// empty ocean there is not "no hazard", it is "not modelled", and a map that
+// pans to blankness invites the first reading.
+const MAX_BOUNDS: [[number, number], [number, number]] =
+  [[70.5, 3.5], [86.0, 17.5]];
+
+// Stops the user zooming out until the AOI is a speck in a blank Indian Ocean.
+const MIN_ZOOM = 5;
 
 // Boundary styling. Each zone type is visually distinct because they mean
 // different things: crossing an IMBL is a legal event, crossing the 24 NM line
@@ -64,6 +83,7 @@ export default function MapView({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const map = useRef<MlMap | null>(null);
+  const resizeObs = useRef<ResizeObserver | null>(null);
   // True once the load handler below has added every source and layer.
   //
   // THIS REPLACES isStyleLoaded() AS THE GATE ON EVERY DATA EFFECT, and the
@@ -92,9 +112,19 @@ export default function MapView({
     if (map.current || !ref.current) return;
     const m = new maplibregl.Map({
       container: ref.current, style: STYLE,
-      center: INITIAL_CENTER, zoom: INITIAL_ZOOM, attributionControl: {},
+      bounds: AOI_BOUNDS, fitBoundsOptions: { padding: 24 },
+      maxBounds: MAX_BOUNDS, minZoom: MIN_ZOOM,
+      attributionControl: {},
     });
     map.current = m;
+
+    // The map is absolutely positioned inside a flex row of the shell, so its
+    // box changes height whenever the simulation banner appears or the verdict
+    // line wraps. MapLibre only watches the window, not the container, and a
+    // stale size shows as a half-painted canvas with clicks landing off-target.
+    const ro = new ResizeObserver(() => m.resize());
+    ro.observe(ref.current);
+    resizeObs.current = ro;
     m.addControl(new maplibregl.NavigationControl({}), "bottom-right");
     m.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-left");
 
@@ -267,7 +297,11 @@ export default function MapView({
       setReady(true);
     });
 
-    return () => { setReady(false); m.remove(); map.current = null; };
+    return () => {
+      setReady(false);
+      resizeObs.current?.disconnect(); resizeObs.current = null;
+      m.remove(); map.current = null;
+    };
   }, []);
 
   useEffect(() => {
@@ -356,5 +390,20 @@ export default function MapView({
       ["in", ["get", "zone_id"], ["literal", highlightZones]]);
   }, [highlightCells, highlightZones, ready]);
 
-  return <div id="map" ref={ref} />;
+  // Re-frame on the AOI. The one gesture that undoes any amount of panning and
+  // zooming: without it, a user who drags off the coast has no way back to the
+  // area the data covers except by guessing.
+  const resetView = () => {
+    map.current?.fitBounds(AOI_BOUNDS, { padding: 24, duration: 500 });
+  };
+
+  return (
+    <>
+      <div id="map" ref={ref} />
+      <button className="mapreset" onClick={resetView}
+              title="Re-frame on the Kerala-Tamil Nadu area of interest">
+        Reset view
+      </button>
+    </>
+  );
 }

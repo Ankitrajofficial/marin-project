@@ -182,23 +182,6 @@ export default function Page() {
         </div>
       )}
 
-      <MapView
-        data={risk}
-        zones={zones}
-        selectedCell={selected}
-        onBboxChange={onBboxChange}
-        onCellClick={onCellClick}
-        onMapClick={onMapClick}
-        marker={point}
-        highlightCells={hlCells}
-        highlightZones={hlZones}
-        vessels={recall ? [...recall.ranked, ...recall.cannot_assess] : []}
-        selectedVessel={vessel}
-        onVesselClick={onVesselClick}
-      />
-
-      <ChatPanel onHighlight={onHighlight} />
-
       <div className="topbar">
         <div className="brand">
           ORCA <small>marine hazard field · Kerala–Tamil Nadu</small>
@@ -237,6 +220,27 @@ export default function Page() {
 
       <VerdictBanner risk={risk} />
 
+      {/* Everything that belongs TO the map lives inside the stage, which is
+          the flex row below the header. Nothing here can overlap the header,
+          because it is a sibling of it rather than a layer over it. */}
+      <div className="stage">
+      <MapView
+        data={risk}
+        zones={zones}
+        selectedCell={selected}
+        onBboxChange={onBboxChange}
+        onCellClick={onCellClick}
+        onMapClick={onMapClick}
+        marker={point}
+        highlightCells={hlCells}
+        highlightZones={hlZones}
+        vessels={recall ? [...recall.ranked, ...recall.cannot_assess] : []}
+        selectedVessel={vessel}
+        onVesselClick={onVesselClick}
+      />
+
+      <ChatPanel onHighlight={onHighlight} />
+
       {error && <div className="card err">{error}</div>}
 
       <Legend observedMax={risk?.hazard_prob_max ?? null} />
@@ -269,6 +273,7 @@ export default function Page() {
           )}
         </aside>
       )}
+      </div>
     </main>
   );
 }
