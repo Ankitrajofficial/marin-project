@@ -28,9 +28,36 @@ export default function GeofencePanel({
     <>
       <h3>Boundaries</h3>
 
-      {/* The guard, rendered. These lines are open data, not legal boundaries,
+      {/* Official IMD warnings first: they are authoritative, unlike every
+          other zone here, and IMD requires explicit attribution wherever they
+          appear. */}
+      {g.official_alerts.length > 0 && (
+        <div className="official">
+          <div className="official-head">
+            ◆ OFFICIAL WARNING — India Meteorological Department
+          </div>
+          {g.official_alerts.map((a) => (
+            <div key={a.zone_id} className="official-body">
+              <b>{a.event ?? a.name}</b>
+              {a.severity && ` · severity ${a.severity}`}
+              {a.verdict === "inside" ? " · you are inside this area" :
+                ` · ${a.distance_nm} NM away`}
+              {a.expires && (
+                <><br />in force until {new Date(a.expires).toLocaleString(
+                  undefined, { timeZone: "Asia/Kolkata" })} IST</>
+              )}
+              {a.sender_name && <><br />{a.sender_name}</>}
+              {/* Mandatory attribution, rendered with the warning, never
+                  tucked into a footer. */}
+              <div className="attrib">{a.attribution}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* The boundary guard. These lines are open data, not legal boundaries,
           and that must be visible next to the number -- not in a tooltip. */}
-      {g.advisory_only && (
+      {g.boundaries_advisory_only && (
         <div className="warn" style={{ marginTop: 0 }}>
           <b>ADVISORY ONLY.</b> Open-data boundaries (MarineRegions/VLIZ,
           OpenStreetMap). Not Survey of India. No legal authority. Do not use

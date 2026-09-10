@@ -139,6 +139,12 @@ CREATE TABLE IF NOT EXISTS hazard_zones (
     source_id   TEXT REFERENCES sources(source_id),
     source_url  TEXT,
     meta        JSONB,            -- treaty date, IUCN class, upstream ids
+    -- Validity window. A maritime boundary has none (NULL = always in force);
+    -- an IMD warning polygon is only meaningful between its CAP onset and
+    -- expires, and serving an expired warning as current is its own kind of
+    -- wrong answer.
+    valid_from  TIMESTAMPTZ,
+    valid_until TIMESTAMPTZ,
     fetched_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     CONSTRAINT hazard_zones_geom_type CHECK (

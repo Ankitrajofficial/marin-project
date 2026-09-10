@@ -23,12 +23,18 @@ from app.db import get_conn
 
 router = APIRouter(prefix="/api", tags=["geofence"])
 
-DISCLAIMER = (
+BOUNDARY_DISCLAIMER = (
     "Boundaries shown are from open datasets (MarineRegions/VLIZ, OpenStreetMap) "
     "and are ADVISORY ONLY. They are not Survey of India definitions and carry no "
     "legal authority. Do not rely on them for navigation, enforcement, or any "
     "determination of maritime jurisdiction."
 )
+OFFICIAL_NOTE = (
+    " Warnings marked official are issued by the India Meteorological "
+    "Department (IMD), Ministry of Earth Sciences, Government of India, and "
+    "are authoritative. Attribution to IMD is required wherever they are shown."
+)
+DISCLAIMER = BOUNDARY_DISCLAIMER
 
 
 def _hit(h) -> ZoneHitOut:
@@ -53,8 +59,12 @@ async def geofence(
         alerts=[_hit(h) for h in r.alerts],
         nearest_by_type={k: _hit(v) for k, v in r.nearest_by_type.items()},
         advisory_only=r.advisory_only,
+        boundaries_advisory_only=r.boundaries_advisory_only,
+        official_alerts=r.official_alerts,
         attributions=r.attributions,
-        disclaimer=DISCLAIMER,
+        # The boundary disclaimer always applies; the official note is added
+        # only when an authoritative warning actually bears on the position.
+        disclaimer=BOUNDARY_DISCLAIMER + (OFFICIAL_NOTE if r.official_alerts else ""),
     )
 
 
@@ -67,7 +77,8 @@ async def zones(
         description="Douglas-Peucker tolerance in degrees, for map rendering only",
     ),
 ) -> ZoneFeatureCollection:
-    where, params = ["TRUE"], {}
+    # Same rule as the geofence: expired warnings are not current information.
+    where, params = ["(valid_until IS NULL OR valid_until > now())"], {}
     if bbox:
         try:
             w, s, e, n = (float(v) for v in bbox.split(","))

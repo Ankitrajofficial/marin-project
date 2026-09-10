@@ -94,6 +94,16 @@ export interface ZoneHit {
   meta: Record<string, unknown>;
 }
 
+export interface OfficialAlert {
+  zone_id: string; zone_type: string; name: string | null;
+  verdict: string; distance_nm: number;
+  // IMD requires explicit attribution. Non-optional so a component cannot
+  // render an official warning without it.
+  attribution: string;
+  severity: string | null; event: string | null;
+  expires: string | null; sender_name: string | null;
+}
+
 export interface GeofenceResponse {
   lat: number; lon: number; buffer_nm: number;
   verdict: "inside" | "alert" | "clear";
@@ -101,6 +111,11 @@ export interface GeofenceResponse {
   alerts: ZoneHit[];
   nearest_by_type: Record<string, ZoneHit>;
   advisory_only: boolean;
+  // True while every BOUNDARY is open data — this is the one that governs
+  // whether a distance-to-IMBL may be shown as a legal line. It does not flip
+  // just because an official warning is nearby.
+  boundaries_advisory_only: boolean;
+  official_alerts: OfficialAlert[];
   attributions: string[];
   disclaimer: string;
 }

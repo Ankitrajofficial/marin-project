@@ -139,3 +139,12 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
   cursor: pointer; font: inherit; }
 .scen-btn.danger { background: var(--sim); color: #fff; }
 .scen-btn:disabled { opacity: .5; cursor: default; }
+
+/* ---- official (IMD) warnings: visually distinct from advisory boundaries ---- */
+.official { border: 1px solid #ff9500; border-radius: 7px; overflow: hidden;
+  margin: 10px 0; }
+.official-head { background: #ff9500; color: #17110a; font-weight: 700;
+  font-size: 11px; letter-spacing: .04em; padding: 6px 9px; }
+.official-body { padding: 8px 9px; font-size: 12px; line-height: 1.55; }
+.attrib { margin-top: 7px; padding-top: 6px; border-top: 1px solid var(--line);
+  color: var(--muted); font-size: 10.5px; line-height: 1.5; }

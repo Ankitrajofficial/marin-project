@@ -171,12 +171,16 @@ class GeofenceResponse(BaseModel):
     alerts: list[ZoneHitOut]
     nearest_by_type: dict[str, ZoneHitOut]
 
-    #: REQUIRED, no default. True while every loaded zone is open data.
-    #: MarineRegions is a VLIZ compilation and OSM is crowd-sourced; neither is
-    #: Survey of India and neither carries legal authority. A client rendering
-    #: a distance-to-IMBL without this is presenting an advisory line as a
-    #: legal one.
+    #: REQUIRED. True when nothing AUTHORITATIVE bears on this position.
     advisory_only: bool
+    #: REQUIRED. True while every BOUNDARY zone is open data -- this is the
+    #: flag that governs whether a distance-to-IMBL may be shown as a legal
+    #: line. It does NOT flip just because an official IMD warning is nearby.
+    boundaries_advisory_only: bool
+    #: Official warnings actually bearing on this position (IMD CAP), each with
+    #: its mandatory attribution. IMD requires explicit attribution and this is
+    #: how it reaches the UI.
+    official_alerts: list[dict[str, Any]] = Field(default_factory=list)
     #: Attribution strings that MUST be displayed alongside any of these
     #: numbers. Required, not defaulted, for the same reason.
     attributions: list[str]

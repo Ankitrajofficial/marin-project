@@ -40,6 +40,8 @@ const ZONE_LINE_COLOR: (string | string[])[] = [
   "contiguous_zone", "#3a86c8",
   "eez", "#8e8e93",
   "mpa", "#34c759",
+  // Official IMD warning: distinct from every advisory boundary on the map.
+  "imd_warning", "#ff9500",
   "#8e8e93",
 ];
 
@@ -186,14 +188,19 @@ export default function MapView({
       // MPA fill sits UNDER the risk layer so hazard colour stays readable.
       m.addLayer({
         id: "zone-fill", type: "fill", source: "zones",
-        filter: ["==", ["get", "zone_type"], "mpa"],
-        paint: { "fill-color": "#34c759", "fill-opacity": 0.14 },
+        filter: ["in", ["get", "zone_type"], ["literal", ["mpa", "imd_warning"]]],
+        paint: {
+          "fill-color": ["case",
+            ["==", ["get", "zone_type"], "imd_warning"], "#ff9500", "#34c759"],
+          "fill-opacity": ["case",
+            ["==", ["get", "zone_type"], "imd_warning"], 0.22, 0.14],
+        },
       }, "risk-fill");
       m.addLayer({
         id: "zone-line", type: "line", source: "zones",
         paint: {
           "line-color": ZONE_LINE_COLOR as unknown as maplibregl.ExpressionSpecification,
-          "line-width": ["match", ["get", "zone_type"], "imbl", 2.4, 1.2],
+          "line-width": ["match", ["get", "zone_type"], "imbl", 2.4, "imd_warning", 2.0, 1.2],
           "line-dasharray": ["match", ["get", "zone_type"],
             "imbl", ["literal", [3, 2]],
             "baseline", ["literal", [1, 2]],

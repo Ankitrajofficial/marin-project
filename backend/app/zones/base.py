@@ -52,6 +52,11 @@ class ZoneRecord:
     source_id: str | None = None
     source_url: str | None = None
     meta: dict[str, Any] = field(default_factory=dict)
+    #: Validity window. NULL/None means "always in force" -- a maritime
+    #: boundary does not expire. An IMD warning does, and serving an expired
+    #: warning as current is its own kind of wrong answer.
+    valid_from: Any = None
+    valid_until: Any = None
 
     def __post_init__(self) -> None:
         if self.authority not in (AUTHORITY_OFFICIAL, AUTHORITY_ADVISORY):
@@ -81,12 +86,12 @@ class ZoneRecord:
 _UPSERT_SQL = """
 INSERT INTO hazard_zones
     (zone_id, zone_type, name, geom, authority, attribution,
-     license, source_id, source_url, meta, fetched_at)
+     license, source_id, source_url, meta, valid_from, valid_until, fetched_at)
 VALUES (
     %s, %s, %s,
     ST_Multi(ST_CollectionExtract(
         ST_MakeValid(ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326)), %s)),
-    %s, %s, %s, %s, %s, %s, now()
+    %s, %s, %s, %s, %s, %s, %s, %s, now()
 )
 ON CONFLICT (zone_id) DO UPDATE SET
     zone_type   = EXCLUDED.zone_type,
@@ -98,6 +103,8 @@ ON CONFLICT (zone_id) DO UPDATE SET
     source_id   = EXCLUDED.source_id,
     source_url  = EXCLUDED.source_url,
     meta        = EXCLUDED.meta,
+    valid_from  = EXCLUDED.valid_from,
+    valid_until = EXCLUDED.valid_until,
     fetched_at  = now()
 """
 
@@ -119,6 +126,7 @@ async def write_zones(conn: Any, zones: Sequence[ZoneRecord]) -> int:
                     json.dumps(z.geometry), z.collection_dim,
                     z.authority, z.attribution, z.license,
                     z.source_id, z.source_url, Json(z.meta),
+                    z.valid_from, z.valid_until,
                 ),
             )
     return len(zones)

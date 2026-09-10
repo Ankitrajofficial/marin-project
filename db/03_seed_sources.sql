@@ -32,6 +32,16 @@ INSERT INTO sources (source_id, name, access_mode, reliability, base_url, notes)
    'Tier 1. No key, open WFS. EEZ / territorial sea / treaty boundary lines '
    'incl. the India-Sri Lanka IMBL. CC-BY 4.0. ADVISORY ONLY: a scientific '
    'compilation, NOT Survey of India, no legal authority.'),
+  ('imd_cap',           'IMD CAP alerts',           'api',    0.98,
+   'https://cap-sources.s3.amazonaws.com/in-imd-en/rss.xml',
+   'Tier 1, VERIFIED REACHABLE with no credentials. Official CAP 1.2 warnings '
+   'from India Meteorological Department, NWFC Division, New Delhi. Public '
+   'domain per the feed. Highest reliability of any source here: it is the '
+   'legally mandated national warning authority, not a model. ATTRIBUTION IS '
+   'MANDATORY and enforced by hazard_zones.attribution NOT NULL. '
+   'NOTE: api.imd.gov.in/api/v1/* (cyclone_track, cyclone_wind, cyclone_cou, '
+   'seabulletin, coastalbulletin) all return HTTP 401 "API key missing" -- '
+   'documented but not open. The x-api-key header is recognised.'),
   ('scenario_sim',      'Scenario simulation',      'api',    0.90,
    NULL,
    'SYNTHETIC. Injected by backend/app/scenarios/ for demonstration. '

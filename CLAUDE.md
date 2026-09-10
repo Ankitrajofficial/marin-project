@@ -80,11 +80,51 @@ of the same engine, not a separate product.
 PostgreSQL 16 + PostGIS + TimescaleDB + pgvector. One database, no Redis
 in MVP. Python 3.11, FastAPI, LangGraph. Next.js + MapLibre.
 
-## Sources by access reality
-Tier 1 (no key, works today): Open-Meteo Marine + Weather, AISStream,
-OSM Overpass, NOAA ERDDAP, GEBCO.
-Tier 2 (registration): Copernicus Marine, Bhuvan, MOSDAC, Bhashini, IMD.
-Tier 3 (no API, bulletin/scrape): INCOIS PFZ, INCOIS OSF.
+## Sources by access reality — VERIFIED, not assumed
+Tier 1 (no key, called successfully): Open-Meteo Marine + Weather, AISStream,
+OSM Overpass, MarineRegions WFS, and IMD CAP alerts
+(cap-sources.s3.amazonaws.com/in-imd-en/rss.xml — HTTP 200, public domain,
+CAP 1.2 with polygons). Sibling channels in the same bucket: in-imd-ur,
+in-ndma-en, in-ndma-ur.
+
+Tier 2 (needs a key we do not have): api.imd.gov.in/api/v1/* — cyclone_track,
+cyclone_wind, cyclone_cou, seabulletin, coastalbulletin, portwarning are all
+fully documented at api.imd.gov.in/public/api_reference.html and every one
+returns HTTP 401 {"error":"API key missing"}. The reference page never
+mentions auth. `x-api-key` is the recognised header (supplying it advances the
+error to "Authorization header missing or invalid"), so a key AND an
+Authorization header are needed. Those endpoints are the right home for real
+cyclone track and cone-of-uncertainty data — get a key. Also Copernicus
+Marine, Bhuvan, MOSDAC, Bhashini, WDPA.
+
+Tier 2.5 (INCOIS GeoServer, partly open): geoserver/wms GetCapabilities is
+HTTP 200 with 271 layers; top-level geoserver/wfs GetCapabilities is 403, but
+WORKSPACE-SCOPED WFS GetFeature works and returns GeoJSON. Verified usable:
+OSF_CoastalForecast:SECTORNAME_TAMILNADU/_KERALA (official sector polygons,
+geometry only — no forecast values), PFZ_LandingCentres (1,223 landing
+centres, 547 in Kerala/TN, with real PFZ bearing/distance/depth fields but
+FROZEN at 2024-04-27 — a snapshot, not a feed), TideGauges.
+
+Tier 3 (no API): INCOIS PFZ bulletin pages.
+
+The adapter layer exists because these tiers differ in format, units, time
+convention and access model. That normalization is a feature.
+
+## IMD attribution is mandatory
+IMD requires explicit attribution. hazard_zones.attribution is NOT NULL, IMD
+rows are the ONLY authority='official' rows in the database (reliability 0.98,
+the highest of any source — it is the legally mandated national warning
+authority, not a model), and the attribution string is rendered WITH the
+warning in the UI, never in a footer.
+
+Two flags, deliberately separate, because conflating them misrepresents:
+  advisory_only            nothing authoritative bears on this position
+  boundaries_advisory_only every BOUNDARY is open data — the flag that
+                           governs whether a distance-to-IMBL may be shown as
+                           a legal line. It must NOT flip just because an
+                           official warning is nearby.
+Expired warnings are excluded everywhere by valid_until: an expired warning
+served as current is worse than none, because it looks like live information.
 The adapter layer exists because these tiers differ in format, units,
 time convention and access model. That normalization is a feature.
 

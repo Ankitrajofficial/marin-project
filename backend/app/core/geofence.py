@@ -62,6 +62,14 @@ VERDICT_INSIDE = "inside"
 VERDICT_ALERT = "alert"
 VERDICT_CLEAR = "clear"
 
+AUTHORITY_OFFICIAL = "official"
+
+#: Zone types that describe a BOUNDARY rather than a warning. Only these
+#: govern whether a distance may be presented as a legal line.
+BOUNDARY_ZONE_TYPES = frozenset({
+    "imbl", "eez", "territorial_sea", "contiguous_zone", "baseline", "mpa",
+})
+
 
 @dataclass(frozen=True, slots=True)
 class ZoneHit:
@@ -98,10 +106,22 @@ class GeofenceResult:
     alerts: list[ZoneHit]
     nearest_by_type: dict[str, ZoneHit]
     attributions: list[str]
-    #: ALWAYS TRUE while every zone in the table is open data. Carried on the
-    #: result rather than added by the API layer, so it cannot be dropped
-    #: between here and the screen.
+    #: True when nothing AUTHORITATIVE bears on this position -- i.e. every
+    #: zone the vessel is inside or approaching is open data.
+    #:
+    #: Computed over inside+alerts, NOT over every zone in nearest_by_type.
+    #: The naive version (all hits) flipped to False at Katchatheevu because a
+    #: distant IMD warning appeared in nearest_by_type, which reads as "these
+    #: boundaries are authoritative" -- the precise misrepresentation this flag
+    #: exists to prevent.
     advisory_only: bool
+    #: True while every BOUNDARY-type zone is open data, regardless of any
+    #: official warning nearby. This is the one that governs whether a
+    #: distance-to-IMBL may be presented as legal. Always True today.
+    boundaries_advisory_only: bool
+    #: Official zones actually bearing on this position, with their mandatory
+    #: attribution. Empty when nothing authoritative applies.
+    official_alerts: list[dict[str, Any]]
 
 
 # ---------------------------------------------------------------------------
@@ -136,6 +156,11 @@ SELECT z.zone_id,
   FROM hazard_zones z
   CROSS JOIN p
   LEFT JOIN LATERAL (SELECT ST_ClosestPoint(z.edge_geom, p.g) AS pt) cp ON TRUE
+ -- Only zones IN FORCE. A boundary has no expiry (valid_until IS NULL) and is
+ -- always in force; a warning does, and an expired warning served as current
+ -- is its own kind of wrong answer -- arguably worse than none, because it
+ -- looks like live information.
+ WHERE z.valid_until IS NULL OR z.valid_until > now()
  ORDER BY dist_m
 """
 
@@ -241,11 +266,28 @@ async def proximity_alert(
     else:
         verdict = VERDICT_CLEAR
 
+    # Only zones the vessel is actually inside or approaching count toward
+    # whether something authoritative applies. See the field comment.
+    relevant = inside + [h for h in alerts if not h.inside]
+    official = [h for h in relevant if h.authority == AUTHORITY_OFFICIAL]
+
     return GeofenceResult(
         lat=lat, lon=lon, buffer_nm=buffer_nm, verdict=verdict,
         inside=inside, alerts=alerts, nearest_by_type=nearest,
         attributions=sorted({h.attribution for h in hits}),
-        # Recomputed from the data, not hardcoded: the day an 'official' zone
-        # is loaded, this stops claiming everything is advisory.
-        advisory_only=all(h.authority != "official" for h in hits),
+        advisory_only=not official,
+        # Boundary data is advisory regardless of any warning nearby.
+        boundaries_advisory_only=all(
+            h.authority != AUTHORITY_OFFICIAL
+            for h in hits if h.zone_type in BOUNDARY_ZONE_TYPES
+        ),
+        official_alerts=[{
+            "zone_id": h.zone_id, "zone_type": h.zone_type, "name": h.name,
+            "verdict": h.verdict, "distance_nm": round(h.distance_nm, 2),
+            "attribution": h.attribution,
+            "severity": (h.meta or {}).get("severity"),
+            "event": (h.meta or {}).get("event"),
+            "expires": (h.meta or {}).get("expires"),
+            "sender_name": (h.meta or {}).get("sender_name"),
+        } for h in official],
     )
