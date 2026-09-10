@@ -236,15 +236,28 @@ CREATE TABLE IF NOT EXISTS risk_cells (
 
 -- ------------------------------------------------------ advisory_chunks
 -- Chunked text of scraped bulletins (INCOIS PFZ, IMD cyclone) for retrieval.
-CREATE TABLE IF NOT EXISTS advisory_chunks (
-    chunk_id    BIGSERIAL PRIMARY KEY,
-    source_id   TEXT REFERENCES sources(source_id),
-    issued_time TIMESTAMPTZ,
-    content     TEXT NOT NULL,
-    embedding   VECTOR(1024)
-    -- No ANN index yet: the operator class depends on cosine vs L2, which is
-    -- decided when the first embeddings land. Exact search is fine until then.
-);
+-- Created only where pgvector exists; see the note in 01_extensions.sql. The
+-- VECTOR column is the only thing in this schema that needs the extension, so
+-- the conditional is confined to this one table rather than the whole file.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector') THEN
+        CREATE TABLE IF NOT EXISTS advisory_chunks (
+            chunk_id    BIGSERIAL PRIMARY KEY,
+            source_id   TEXT REFERENCES sources(source_id),
+            issued_time TIMESTAMPTZ,
+            content     TEXT NOT NULL,
+            embedding   VECTOR(1024)
+            -- No ANN index yet: the operator class depends on cosine vs L2,
+            -- which is decided when the first embeddings land. Exact search is
+            -- fine until then.
+        );
+    ELSE
+        RAISE NOTICE 'advisory_chunks skipped: pgvector not installed. Nothing '
+                     'in app/ or jobs/ reads it; add the extension and re-run '
+                     'this file when retrieval work begins.';
+    END IF;
+END $$;
 
 -- ------------------------------------------------- scenario machinery
 -- Scenario injection lives entirely outside core/. core/ cannot tell a

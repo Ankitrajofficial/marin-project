@@ -1,14 +1,42 @@
-# Render blueprint for the ORCA API (free tier).
+# Render blueprint for ORCA: the API and its database, in one deploy.
 #
-# The database is NOT declared here. Render's managed Postgres ships PostGIS
-# but not TimescaleDB, and its free instance expires after 30 days -- so the
-# database lives on Supabase (PostGIS + pgvector, free, no expiry) and its URI
-# is pasted into DATABASE_URL below. db/01_extensions.sql already treats
-# Timescale as optional, which is what makes that substitution safe.
+# The database IS declared here now, and that is a deliberate reversal. It used
+# to live on Supabase because Render's managed Postgres has no TimescaleDB --
+# but Timescale stopped being required (db/01_extensions.sql treats it as
+# optional, and no query in app/ or jobs/ calls a Timescale function), and
+# pgvector is optional too, so PostGIS is the only hard requirement left.
+# Render's Postgres has it.
+#
+# What that buys is the difference between a deploy that happens and one that
+# does not. The Supabase route needed an account, a project, the right pooler
+# URI, and a paste into a field -- four steps before anything ran, each able to
+# fail quietly. Declaring the database here makes it one approval.
+#
+# THE COST, STATED PLAINLY: a free Render Postgres expires 30 days after
+# creation and is then deleted. That is fine for a demo and not fine for
+# anything else. To move to a durable database later, delete the `databases`
+# block, set DATABASE_URL to sync: false, and paste a Supabase session-pooler
+# URI -- the schema and every job work unchanged against either.
 #
 # Free tier spins the service down after ~15 minutes of no traffic; the next
 # request pays a cold start. The scheduled workflow in
 # .github/workflows/refresh-data.yml doubles as a keep-warm ping.
+
+databases:
+  - name: orca-db
+    plan: free
+    region: singapore          # must match the service region below, or the
+                               # service cannot use the internal connection
+    postgresMajorVersion: "16"
+    # The GitHub Actions refresh job connects from a runner whose IP is not
+    # predictable, so external access has to be open. The password Render
+    # generates is long and random and is never in this file; still, this is a
+    # publicly reachable database holding public forecast data and nothing
+    # else -- no personal data, no credentials, nothing whose disclosure
+    # matters. Do not reuse this posture for a database where that is untrue.
+    ipAllowList:
+      - source: 0.0.0.0/0
+        description: GitHub Actions refresh-data job
 
 services:
   - type: web
@@ -24,8 +52,14 @@ services:
     envVars:
       # sync: false = "prompt me, never store in git". These are secrets and a
       # connection string with a password in it; the repo is public.
+      # Wired automatically from the database above -- nothing to paste, and no
+      # connection string in git. This is the INTERNAL URL, which only works
+      # from inside Render; the refresh workflow needs the EXTERNAL one, copied
+      # from the database's dashboard page into the DATABASE_URL repo secret.
       - key: DATABASE_URL
-        sync: false            # Supabase SESSION pooler URI (see below)
+        fromDatabase:
+          name: orca-db
+          property: connectionString
       - key: GEMINI_API_KEY
         sync: false            # only /api/chat needs it; everything else works without
       - key: AISSTREAM_API_KEY

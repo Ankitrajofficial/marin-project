@@ -6,8 +6,21 @@
 --             the schema does not even create, which is the correct failure.
 CREATE EXTENSION IF NOT EXISTS postgis;
 
--- vector      pgvector, for advisory_chunks.embedding (RAG over bulletins)
-CREATE EXTENSION IF NOT EXISTS vector;
+-- vector      pgvector, for advisory_chunks.embedding (RAG over bulletins).
+--             OPTIONAL, for the same reason timescaledb is: NOTHING in app/ or
+--             jobs/ reads advisory_chunks or embedding today -- it is scaffolding
+--             for retrieval over scraped bulletins, and grep finds no consumer.
+--             A hard requirement here would let an extension no code uses take
+--             down the schema, and with it the whole deploy, on any host that
+--             does not ship pgvector. 02_schema.sql skips the one table that
+--             needs it and creates everything else.
+DO $$
+BEGIN
+    CREATE EXTENSION IF NOT EXISTS vector;
+    RAISE NOTICE 'pgvector enabled -- advisory_chunks.embedding available';
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'pgvector unavailable (%) -- advisory_chunks will be skipped', SQLERRM;
+END $$;
 
 -- timescaledb OPTIONAL, and deliberately so.
 --
