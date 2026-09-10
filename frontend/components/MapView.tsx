@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import maplibregl, { Map as MlMap } from "maplibre-gl";
 import type { RecallEntry, RiskFeatureCollection, ZoneFeatureCollection } from "@/lib/types";
 import { HAZARD_STOPS, NO_DATA_COLOR, SIMULATED_OUTLINE } from "@/lib/color";
@@ -47,7 +47,7 @@ const ZONE_LINE_COLOR: (string | string[])[] = [
 
 export default function MapView({
   data, zones, selectedCell, onBboxChange, onCellClick, onMapClick, marker,
-  highlightCells, highlightZones, vessels, selectedVessel,
+  highlightCells, highlightZones, vessels, selectedVessel, onVesselClick,
 }: {
   data: RiskFeatureCollection | null;
   zones: ZoneFeatureCollection | null;
@@ -59,14 +59,33 @@ export default function MapView({
   onBboxChange: (bbox: [number, number, number, number]) => void;
   onCellClick: (cell: string) => void;
   onMapClick: (lat: number, lon: number) => void;
+  onVesselClick: (mmsi: string) => void;
   marker: { lat: number; lon: number } | null;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const map = useRef<MlMap | null>(null);
+  // True once the load handler below has added every source and layer.
+  //
+  // THIS REPLACES isStyleLoaded() AS THE GATE ON EVERY DATA EFFECT, and the
+  // difference is not cosmetic. isStyleLoaded() is TRANSIENT: MapLibre reports
+  // false whenever any source is still fetching, which includes the OSM raster
+  // tiles streaming in for several seconds after the map is usable. An effect
+  // that returns early on it has no second chance -- it only re-runs when its
+  // own dependency changes, and data fetched once never changes again.
+  //
+  // That is exactly how 52 vessels went missing: /api/recall resolved while
+  // tiles were still loading, the effect bailed, nothing re-rendered, and the
+  // fleet never reached the map even though the panel counted it. Silent, and
+  // invisible in the console.
+  //
+  // `ready` is a one-way latch on a state variable instead, so flipping it
+  // re-runs every effect that is waiting, and whatever arrived early is
+  // applied then.
+  const [ready, setReady] = useState(false);
   // Callbacks live in refs so the map is built exactly once; rebuilding it on
   // every render would fight MapLibre's own lifecycle and drop the viewport.
-  const cbs = useRef({ onBboxChange, onCellClick, onMapClick });
-  cbs.current = { onBboxChange, onCellClick, onMapClick };
+  const cbs = useRef({ onBboxChange, onCellClick, onMapClick, onVesselClick });
+  cbs.current = { onBboxChange, onCellClick, onMapClick, onVesselClick };
   const markerRef = useRef<maplibregl.Marker | null>(null);
 
   useEffect(() => {
@@ -164,7 +183,9 @@ export default function MapView({
       m.addLayer({
         id: "vessel-dot", type: "circle", source: "vessels",
         paint: {
-          "circle-radius": ["case", ["get", "selected"], 7, 4.5],
+          // Big enough to see against the hazard ramp and to hit with a
+          // mouse: these are click targets now, not decoration.
+          "circle-radius": ["case", ["get", "selected"], 9, 6],
           "circle-color": ["case",
             ["get", "simulated"], "#c026d3",
             ["get", "urgent"], "#d9534f",
@@ -211,7 +232,21 @@ export default function MapView({
       // Any click anywhere is a geofence query: a boat is at a POSITION, not
       // in a hazard cell, and the boundary question applies over open water
       // where no risk cell has been computed.
-      m.on("click", (e) => cbs.current.onMapClick(e.lngLat.lat, e.lngLat.lng));
+      m.on("click", (e) => {
+        // A click that landed on a boat is a question about THAT BOAT, not
+        // about the water under it. Without this test both handlers fire and
+        // the position panel elbows the recall panel aside on every vessel
+        // click.
+        if (m.queryRenderedFeatures(e.point, { layers: ["vessel-dot"] }).length) return;
+        cbs.current.onMapClick(e.lngLat.lat, e.lngLat.lng);
+      });
+
+      m.on("click", "vessel-dot", (e) => {
+        const f = e.features?.[0];
+        if (f) cbs.current.onVesselClick(f.properties!.mmsi as string);
+      });
+      m.on("mouseenter", "vessel-dot", () => { m.getCanvas().style.cursor = "pointer"; });
+      m.on("mouseleave", "vessel-dot", () => { m.getCanvas().style.cursor = ""; });
 
       m.on("click", "risk-fill", (e) => {
         const f = e.features?.[0];
@@ -226,24 +261,28 @@ export default function MapView({
       };
       emit();
       m.on("moveend", emit);
+
+      // Last: every source and layer above now exists, so the data effects
+      // may run.
+      setReady(true);
     });
 
-    return () => { m.remove(); map.current = null; };
+    return () => { setReady(false); m.remove(); map.current = null; };
   }, []);
 
   useEffect(() => {
     const m = map.current;
-    if (!m || !m.isStyleLoaded()) return;
+    if (!m || !ready) return;
     const src = m.getSource("risk") as maplibregl.GeoJSONSource | undefined;
     if (src) src.setData((data ?? EMPTY) as unknown as GeoJSON.FeatureCollection);
-  }, [data]);
+  }, [data, ready]);
 
   useEffect(() => {
     const m = map.current;
-    if (!m || !m.isStyleLoaded()) return;
+    if (!m || !ready) return;
     const src = m.getSource("zones") as maplibregl.GeoJSONSource | undefined;
     if (src && zones) src.setData(zones as unknown as GeoJSON.FeatureCollection);
-  }, [zones]);
+  }, [zones, ready]);
 
   useEffect(() => {
     const m = map.current;
@@ -259,13 +298,13 @@ export default function MapView({
 
   useEffect(() => {
     const m = map.current;
-    if (!m || !m.getLayer("risk-selected")) return;
+    if (!m || !ready || !m.getLayer("risk-selected")) return;
     m.setFilter("risk-selected", ["==", ["get", "h3_cell"], selectedCell ?? ""]);
-  }, [selectedCell]);
+  }, [selectedCell, ready]);
 
   useEffect(() => {
     const m = map.current;
-    if (!m || !m.isStyleLoaded()) return;
+    if (!m || !ready) return;
     const vs = m.getSource("vessels") as maplibregl.GeoJSONSource | undefined;
     if (vs) {
       vs.setData({
@@ -306,16 +345,16 @@ export default function MapView({
         ] : [],
       });
     }
-  }, [vessels, selectedVessel]);
+  }, [vessels, selectedVessel, ready]);
 
   useEffect(() => {
     const m = map.current;
-    if (!m || !m.getLayer("risk-highlight")) return;
+    if (!m || !ready || !m.getLayer("risk-highlight")) return;
     m.setFilter("risk-highlight",
       ["in", ["get", "h3_cell"], ["literal", highlightCells]]);
     m.setFilter("zone-highlight",
       ["in", ["get", "zone_id"], ["literal", highlightZones]]);
-  }, [highlightCells, highlightZones]);
+  }, [highlightCells, highlightZones, ready]);
 
   return <div id="map" ref={ref} />;
 }

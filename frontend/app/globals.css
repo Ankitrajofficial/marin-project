@@ -69,6 +69,21 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .simbar { position: absolute; top: 0; left: 0; right: 0; z-index: 8; background: var(--sim);
   color: #fff; text-align: center; padding: 6px; font-weight: 700; letter-spacing: .05em; }
 
+/* The banner is an OVERLAY at z-index 8 over a top bar at z-index 5, both
+   anchored to top: 0. While a scenario was active it therefore covered the
+   whole top row and swallowed its clicks -- including the Scenario control,
+   which is the only way to CLEAR the scenario. Activating a simulation locked
+   you into it, on the one screen where getting back to real data matters most.
+   Nothing was broken in the JavaScript, so nothing said so.
+   Shift everything anchored to the top down by the banner's height instead of
+   letting it overlap. --simbar-h is the padding (6px x 2) plus the line box. */
+.shell { --simbar-h: 31px; }
+.shell.simulated .topbar { top: var(--simbar-h); }
+.shell.simulated .panel { top: var(--simbar-h); }
+.shell.simulated .chat  { top: var(--simbar-h); }
+.shell.simulated .legend,
+.shell.simulated .err   { top: calc(56px + var(--simbar-h)); }
+
 .warn { background: rgba(224,164,88,.12); border: 1px solid var(--warn);
   color: var(--warn); padding: 8px 10px; border-radius: 6px; font-size: 12px; margin: 10px 0; }
 .err { position: absolute; top: 56px; left: 16px; z-index: 7; padding: 10px 14px;
@@ -157,3 +172,11 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
   background: var(--accent); vertical-align: text-bottom;
   animation: blink 1s steps(2, start) infinite; }
 @keyframes blink { to { visibility: hidden; } }
+
+/* A control that reads as text but behaves as a button: used for the vessel
+   count in the top bar, which is the way into the recall list. */
+.linkish {
+  background: none; border: 0; padding: 0; font: inherit; cursor: pointer;
+  color: #4da3d4; text-decoration: underline; text-underline-offset: 2px;
+}
+.linkish:hover { color: #7cc4ea; }

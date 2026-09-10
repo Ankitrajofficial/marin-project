@@ -12,7 +12,7 @@ import ScenarioControl from "@/components/ScenarioControl";
 import { fetchGeofence, fetchRisk, fetchTimes, fetchTrace, fetchZones } from "@/lib/api";
 import type {
   CellTrace, GeofenceResponse, RecallEntry, RecallResponse,
-  RiskFeatureCollection, ZoneFeatureCollection,
+  RiskFeatureCollection, ScenarioStatus, ZoneFeatureCollection,
 } from "@/lib/types";
 import { fetchRecall } from "@/lib/api";
 
@@ -46,10 +46,53 @@ export default function Page() {
   const [traceLoading, setTraceLoading] = useState(false);
   const [traceError, setTraceError] = useState<string | null>(null);
 
+  // Nearest step to NOW, not the last one. The slider spans three days of
+  // forecast, so opening on times.length - 1 answered "what will Saturday
+  // night look like" to someone who asked "can I go out". A hazard map's
+  // default view is the present hour.
+  const nearestToNow = (list: string[]) => {
+    if (list.length === 0) return 0;
+    const now = Date.now();
+    let best = 0, bestGap = Infinity;
+    list.forEach((iso, i) => {
+      const gap = Math.abs(new Date(iso).getTime() - now);
+      if (gap < bestGap) { bestGap = gap; best = i; }
+    });
+    return best;
+  };
+
+  const timesRef = useRef<string[]>([]);
+  timesRef.current = times;
+
   useEffect(() => {
     fetchTimes()
-      .then((t) => { setTimes(t.times); setIndex(Math.max(0, t.times.length - 1)); })
+      .then((t) => { setTimes(t.times); setIndex(nearestToNow(t.times)); })
       .catch((e) => setError(`Cannot reach the API: ${e.message}`));
+  }, []);
+
+  // A scenario replaces the world for a WINDOW of hours. Landing outside it is
+  // the worst of both: the banner says a simulation is running while the map
+  // shows real data, which is precisely the confusion the simulated flag
+  // exists to prevent. Jump to the first step the scenario actually covers.
+  const onScenarioChanged = useCallback((status: ScenarioStatus | null) => {
+    setWorldVersion((v) => v + 1);
+    setVessel(null);
+    const start = status?.active
+      ? (status.params?.start as string | undefined)
+      : undefined;
+    if (!start) return;
+    const t0 = new Date(start).getTime();
+    fetchTimes()
+      .then((t) => {
+        setTimes(t.times);
+        const i = t.times.findIndex((iso) => new Date(iso).getTime() >= t0);
+        setIndex(i >= 0 ? i : nearestToNow(t.times));
+      })
+      .catch(() => {
+        // Times unchanged is the normal case; fall back to what we have.
+        const i = timesRef.current.findIndex((iso) => new Date(iso).getTime() >= t0);
+        if (i >= 0) setIndex(i);
+      });
   }, []);
 
   // Boundaries are static; fetch once. Failure is reported, never faked --
@@ -106,6 +149,18 @@ export default function Page() {
   const onMapClick = useCallback(
     (lat: number, lon: number) => setPoint({ lat, lon }), []
   );
+  const openRecall = useCallback(() => setTab("recall"), []);
+  // Clicking a boat is the obvious way to ask "what about that one", and it
+  // opens the same panel the list uses so the two stay in step.
+  const onVesselClick = useCallback((mmsi: string) => {
+    setRecall((r) => {
+      const hit = r
+        ? [...r.ranked, ...r.cannot_assess].find((v) => v.mmsi === mmsi)
+        : null;
+      if (hit) { setVessel(hit); setTab("recall"); }
+      return r;
+    });
+  }, []);
   const onHighlight = useCallback((cells: string[], zones: string[]) => {
     setHlCells(cells); setHlZones(zones);
   }, []);
@@ -116,7 +171,7 @@ export default function Page() {
   const panelOpen = point !== null || selected !== null || tab === "recall";
 
   return (
-    <main className="shell">
+    <main className={`shell${risk?.simulated ? " simulated" : ""}`}>
       {/* Collection-level guard: if ANY cell in view is simulated, the whole
           view is banded, not just the cell's panel. */}
       {risk?.simulated && (
@@ -137,6 +192,7 @@ export default function Page() {
         highlightZones={hlZones}
         vessels={recall ? [...recall.ranked, ...recall.cannot_assess] : []}
         selectedVessel={vessel}
+        onVesselClick={onVesselClick}
       />
 
       <ChatPanel onHighlight={onHighlight} />
@@ -145,14 +201,24 @@ export default function Page() {
         <div className="brand">
           ORCA <small>marine hazard field · Kerala–Tamil Nadu</small>
         </div>
-        <ScenarioControl onChanged={() => {
-          setWorldVersion((v) => v + 1); setVessel(null);
-        }} />
+        <ScenarioControl onChanged={onScenarioChanged} />
         <div className="hint">
           {risk ? `${risk.n_features} cells` : "…"}
           {zones ? ` · ${zones.n_features} boundaries` : ""}
-          {recall ? ` · ${recall.n_vessels} vessels` : ""} · click the map for a
-          position check
+          {recall && (
+            <>
+              {" · "}
+              {/* The recall list used to be reachable only by clicking the map
+                  first, because the panel that holds its tab opened on a
+                  position click. The prioritised recall list IS the disaster
+                  -management deliverable; it cannot be behind an undocumented
+                  gesture. */}
+              <button className="linkish" onClick={openRecall}>
+                {recall.n_vessels} vessels — recall list
+              </button>
+            </>
+          )}
+          {" · click the map for a position check"}
         </div>
       </div>
 

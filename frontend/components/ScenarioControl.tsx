@@ -7,22 +7,31 @@ import type { ScenarioStatus } from "@/lib/types";
 /** Deliberately visually separate from the rest of the UI, and loud when
  *  active. A simulated hazard field that is not obviously simulated is the
  *  worst failure this system could have — worse than no scenario at all. */
-export default function ScenarioControl({ onChanged }: { onChanged: () => void }) {
+export default function ScenarioControl(
+  { onChanged }: { onChanged: (status: ScenarioStatus | null) => void },
+) {
   const [status, setStatus] = useState<ScenarioStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
 
-  const refresh = () => fetchScenarioStatus().then(setStatus).catch(() => setStatus(null));
+  const refresh = () =>
+    fetchScenarioStatus()
+      .then((s) => { setStatus(s); return s; })
+      .catch(() => { setStatus(null); return null; });
   useEffect(() => { refresh(); }, []);
 
   async function run(fn: () => Promise<unknown>) {
     setBusy(true); setError(null);
     try {
       await fn();
-      await refresh();
-      // The whole field changed underneath every other panel.
-      onChanged();
+      const next = await refresh();
+      // The whole field changed underneath every other panel. The status goes
+      // with the notification because the new world has a WINDOW: a scenario
+      // covers a few hours, and a view parked outside it shows real data under
+      // a banner saying a simulation is running. Whoever reacts to this needs
+      // to know when the simulated hours are.
+      onChanged(next);
     } catch (e) {
       setError((e as Error).message);
     } finally {
