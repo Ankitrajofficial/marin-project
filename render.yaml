@@ -1,0 +1,32 @@
+# Render blueprint for the ORCA API (free tier).
+#
+# The database is NOT declared here. Render's managed Postgres ships PostGIS
+# but not TimescaleDB, and its free instance expires after 30 days -- so the
+# database lives on Supabase (PostGIS + pgvector, free, no expiry) and its URI
+# is pasted into DATABASE_URL below. db/01_extensions.sql already treats
+# Timescale as optional, which is what makes that substitution safe.
+#
+# Free tier spins the service down after ~15 minutes of no traffic; the next
+# request pays a cold start. The scheduled workflow in
+# .github/workflows/refresh-data.yml doubles as a keep-warm ping.
+
+services:
+  - type: web
+    name: orca-api
+    runtime: docker
+    plan: free
+    region: singapore          # closest to the Bay of Bengal AOI and to India
+    dockerfilePath: ./backend/Dockerfile
+    # Repo root, not backend/: the image also needs db/*.sql for the boot-time
+    # schema apply. Must match the Dockerfile's COPY paths.
+    dockerContext: .
+    healthCheckPath: /api/health
+    envVars:
+      # sync: false = "prompt me, never store in git". These are secrets and a
+      # connection string with a password in it; the repo is public.
+      - key: DATABASE_URL
+        sync: false            # Supabase SESSION pooler URI (see below)
+      - key: GEMINI_API_KEY
+        sync: false            # only /api/chat needs it; everything else works without
+      - key: AISSTREAM_API_KEY
+        sync: false            # unused by the API process itself; ingest job only

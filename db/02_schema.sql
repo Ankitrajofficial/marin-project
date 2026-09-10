@@ -338,9 +338,61 @@ CREATE TABLE IF NOT EXISTS traces (
 -- Partition the three high-volume time-series tables. Timescale requires the
 -- partitioning column to appear in every unique index, which is why the
 -- constraints above all include valid_time / ts.
-SELECT create_hypertable('observations',     'valid_time', if_not_exists => TRUE);
-SELECT create_hypertable('vessel_positions', 'ts',         if_not_exists => TRUE);
-SELECT create_hypertable('risk_cells',       'valid_time', if_not_exists => TRUE);
+--
+-- Skipped when timescaledb is absent (see 01_extensions.sql). The tables then
+-- stay ordinary Postgres tables: same columns, same constraints, same rows
+-- back from every query in app/ and jobs/, since none of them calls a
+-- Timescale function. This is what lets the identical schema deploy to a
+-- managed Postgres that has PostGIS but no Timescale.
+DO $$
+DECLARE
+    rec          record;
+    rows_present boolean;
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'timescaledb') THEN
+        RAISE NOTICE 'no timescaledb -- observations, vessel_positions and '
+                     'risk_cells stay unpartitioned';
+        RETURN;
+    END IF;
+
+    FOR rec IN
+        SELECT * FROM (VALUES
+            ('observations',     'valid_time'),
+            ('vessel_positions', 'ts'),
+            ('risk_cells',       'valid_time')
+        ) AS v(tbl, time_col)
+    LOOP
+        IF EXISTS (SELECT 1 FROM timescaledb_information.hypertables
+                   WHERE hypertable_name = rec.tbl) THEN
+            CONTINUE;  -- already partitioned, nothing to do
+        END IF;
+
+        EXECUTE format('SELECT EXISTS (SELECT 1 FROM %I)', rec.tbl) INTO rows_present;
+
+        IF rows_present THEN
+            -- if_not_exists => TRUE does NOT cover this case. It means "skip if
+            -- already a hypertable"; against a PLAIN table holding rows,
+            -- create_hypertable raises FeatureNotSupported and takes the whole
+            -- boot down with it.
+            --
+            -- Reachable in practice: a database populated without Timescale
+            -- (managed Postgres) that later gains the extension -- restored
+            -- into the local docker image, say. Converting then means
+            -- migrate_data => true, which rewrites the table under a lock. That
+            -- is a deliberate migration, not something a boot script should do
+            -- to a live table, so leave it plain and say so loudly.
+            -- %L is a format() specifier, not a RAISE one: RAISE knows only
+            -- %, so %L would print the value followed by a stray "L" and hand
+            -- the reader uncompilable SQL. Quotes are doubled instead.
+            RAISE NOTICE '% already holds rows as a plain table -- leaving it '
+                         'unpartitioned. To convert, run create_hypertable('
+                         '''%'', ''%'', migrate_data => true) when you can '
+                         'take the lock.', rec.tbl, rec.tbl, rec.time_col;
+        ELSE
+            PERFORM create_hypertable(rec.tbl, rec.time_col, if_not_exists => TRUE);
+        END IF;
+    END LOOP;
+END $$;
 
 -- ========================================================= indexes ======
 -- The hot read path: "latest value of variable V in cell C".
@@ -362,6 +414,33 @@ CREATE INDEX IF NOT EXISTS risk_cells_simulated_idx
 -- ======================================================= retention ======
 -- Drop raw rows older than 30 days. No rollup: continuous aggregates for
 -- longer history are a later step, deliberately not part of step 1.
-SELECT add_retention_policy('observations',     INTERVAL '30 days', if_not_exists => TRUE);
-SELECT add_retention_policy('vessel_positions', INTERVAL '30 days', if_not_exists => TRUE);
-SELECT add_retention_policy('risk_cells',       INTERVAL '30 days', if_not_exists => TRUE);
+--
+-- Also Timescale-only: a retention policy is a background job the extension
+-- runs. Without it nothing is dropped automatically, so a long-lived hosted
+-- database grows until something prunes it. At demo volume (~17k observations
+-- per ingest) that is far away, but it is a real difference from local, not a
+-- silent equivalence -- hence the notice rather than a quiet skip.
+DO $$
+DECLARE
+    rec record;
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'timescaledb') THEN
+        RAISE NOTICE 'no timescaledb -- 30-day retention is NOT enforced; '
+                     'old rows must be pruned by other means';
+        RETURN;
+    END IF;
+
+    -- A retention policy attaches to a hypertable. Any table the block above
+    -- left plain has none, so check rather than assume the two loops agreed.
+    FOR rec IN
+        SELECT unnest(ARRAY['observations', 'vessel_positions', 'risk_cells']) AS tbl
+    LOOP
+        IF EXISTS (SELECT 1 FROM timescaledb_information.hypertables
+                   WHERE hypertable_name = rec.tbl) THEN
+            PERFORM add_retention_policy(rec.tbl::regclass, INTERVAL '30 days',
+                                         if_not_exists => TRUE);
+        ELSE
+            RAISE NOTICE 'no retention policy on % (not a hypertable)', rec.tbl;
+        END IF;
+    END LOOP;
+END $$;

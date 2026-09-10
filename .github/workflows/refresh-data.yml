@@ -1,0 +1,70 @@
+# Keep the deployed database current.
+#
+# The forecast horizon is ~3 days. Ingest once and the demo is blank by the
+# weekend -- not broken in an obvious way, but empty, which for a hazard map is
+# the worse failure. So this re-ingests and recomputes on a schedule.
+#
+# It runs here rather than on the API host because the free tier has no cron:
+# Actions minutes are unlimited on public repositories, and the job only needs
+# a database connection, not the web service.
+
+name: refresh-data
+
+on:
+  schedule:
+    # Every 6 hours. Open-Meteo updates its marine run roughly that often, so
+    # anything more frequent re-fetches numbers that have not changed.
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      full:
+        description: "Also load zones, harbours and landing centres (first run only -- they are static)"
+        type: boolean
+        default: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"     # matches backend/.python-version
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - run: pip install -r backend/requirements.txt
+
+      # Idempotent, and cheap when the schema already exists. Present so a
+      # first manual run against an empty Supabase database works without any
+      # separate bootstrap step.
+      - name: Apply schema
+        working-directory: backend
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python -m jobs.init_db
+
+      # Static reference data: coastline zones, harbours, INCOIS landing
+      # centres. They do not change between runs, and the OSM Overpass call is
+      # slow and rate-limited, so this is opt-in rather than every 6 hours.
+      - name: Load static reference data
+        if: inputs.full
+        working-directory: backend
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          python -m jobs.ingest_zones
+          python -m jobs.ingest_harbours
+          python -m jobs.ingest_landing_centres
+
+      # The actual refresh. Bbox covers the Indian EEZ around the southern
+      # peninsula -- the AOI the demo questions ask about.
+      - name: Ingest forecast and recompute risk
+        working-directory: backend
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          python -m jobs.ingest_forecast --bbox 6.0 76.0 16.0 82.0 --forecast-days 3
+          python -m jobs.compute_risk --hours 72
