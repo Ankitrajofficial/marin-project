@@ -2,6 +2,8 @@
 
     python -m jobs.ingest_forecast                          # demo AOI
     python -m jobs.ingest_forecast --bbox 8.0 76.0 9.0 77.0 # H3 coverage grid
+    python -m jobs.ingest_forecast --bbox 7.0 74.0 13.6 81.0 --max-cells 2500 \
+        --sea-only                                          # full coast, 922 cells
     python -m jobs.ingest_forecast --forecast-days 5
 
 Runs both Open-Meteo adapters and reports rows written per variable. Reads
@@ -20,7 +22,10 @@ from collections import Counter
 
 from app.adapters.base import Observation, fetch_reliability
 from app.adapters.open_meteo import OpenMeteoMarineAdapter, OpenMeteoWeatherAdapter
-from app.aoi import KERALA_TN_COAST, Point, aoi_selftest, points_from_bbox
+from app.aoi import (
+    KERALA_TN_COAST, MAX_BBOX_CELLS, Point, aoi_selftest, keep_points_at_sea,
+    points_from_bbox,
+)
 from app.config import settings
 from app.db import close_pool, get_conn, open_pool
 
@@ -59,9 +64,20 @@ def report(title: str, rows: list[tuple]) -> None:
     print(f"  {'':<18} {'TOTAL':<18} {total:>7}")
 
 
-async def run(points: list[Point], forecast_days: int) -> int:
+async def run(points: list[Point], forecast_days: int,
+              sea_only: bool = False) -> int:
     await open_pool()
     try:
+        if sea_only:
+            before = len(points)
+            points = await keep_points_at_sea(points)
+            print(f"water mask: {before} cells -> {len(points)} at sea "
+                  f"({before - len(points)} on land or in foreign waters, "
+                  f"dropped before they cost API quota)")
+            if not points:
+                log.error("water mask left no points; nothing to ingest")
+                return 1
+
         checks = aoi_selftest(tuple(points))
         print(f"AOI: {checks['n_points']} points, {checks['n_distinct_cells']} distinct "
               f"H3 cells, closest pair {checks['min_separation_km']} km")
@@ -101,6 +117,23 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--bbox", nargs=4, type=float, metavar=("S", "W", "N", "E"),
                    help="bounding box; H3-polyfilled at the project resolution. "
                         "Default is the demo AOI in app/aoi.py")
+    # MAX_BBOX_CELLS exists to stop an ACCIDENTAL polyfill explosion, not to cap
+    # coverage: the whole Kerala->Tamil Nadu box is ~2,160 cells at res 5, well
+    # over the 500 default, and a coast covered by 20 hand-placed points renders
+    # as scattered hexagons rather than a hazard field. Raising it is therefore
+    # a deliberate act with a number attached, which is what a flag is for --
+    # the guard still fires for anyone who forgets to think about it.
+    #
+    # Cost is one slot per cell per adapter request (50 points per request), so
+    # 2,160 cells is 44 requests per adapter. Land cells are included and cost a
+    # slot but produce no rows: the marine endpoint returns null over land and
+    # the adapter drops missing readings.
+    p.add_argument("--max-cells", type=int, default=MAX_BBOX_CELLS,
+                   help=f"cap on cells from --bbox (default {MAX_BBOX_CELLS})")
+    # Only meaningful with --bbox: the demo AOI is hand-placed offshore already.
+    p.add_argument("--sea-only", action="store_true",
+                   help="drop cells outside India's maritime zones (land and "
+                        "foreign waters) before fetching; see app/aoi.py")
     p.add_argument("--forecast-days", type=int, default=3)
     return p.parse_args(argv)
 
@@ -109,8 +142,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     logging.basicConfig(level=settings.log_level,
                         format="%(levelname)-7s %(name)s: %(message)s")
-    points = list(points_from_bbox(*args.bbox)) if args.bbox else list(KERALA_TN_COAST)
-    return asyncio.run(run(points, args.forecast_days))
+    points = (list(points_from_bbox(*args.bbox, max_cells=args.max_cells))
+              if args.bbox else list(KERALA_TN_COAST))
+    return asyncio.run(run(points, args.forecast_days, sea_only=args.sea_only))
 
 
 if __name__ == "__main__":

@@ -11,11 +11,14 @@ Two modes:
 
 from __future__ import annotations
 
+import logging
 from typing import NamedTuple
 
 import h3
 
 from app.config import H3_RESOLUTION
+
+log = logging.getLogger(__name__)
 
 
 class Point(NamedTuple):
@@ -104,6 +107,69 @@ def points_from_bbox(
         lat, lon = centroid(cell)
         points.append(Point(round(lat, 6), round(lon, 6), cell))
     return points
+
+
+# ---------------------------------------------------------------------------
+# Water mask.
+#
+# A bbox polyfill is a rectangle, and this rectangle is more than half land:
+# peninsular India and most of Sri Lanka sit inside it. Those cells are not
+# harmless. The marine endpoint returns null over land so they produce no rows,
+# but Open-Meteo's free quota is WEIGHTED BY LOCATION -- a land cell costs the
+# same allowance as a sea cell and buys nothing. Of the 2,160 cells in the
+# Kerala->Tamil Nadu box, 922 are at sea: masking is a 57% cut in quota spend
+# for zero loss of data.
+#
+# THE MASK IS NOT A NEW DATASET. It is the MarineRegions maritime zones already
+# loaded in hazard_zones by jobs/ingest_zones.py. An EEZ / territorial sea /
+# contiguous zone polygon is water by construction -- that is what the boundary
+# means -- so "centroid inside one of them" is a water test with no coastline
+# file, no new dependency, and no hand-drawn polygon to drift out of date.
+#
+# WHAT IT DELIBERATELY EXCLUDES: foreign waters. Sri Lanka's side of the Palk
+# Strait is outside the Indian EEZ and so gets no coverage. That is a coverage
+# limit, not a hazard claim: an uncomputed cell is absent from the map, and
+# core/risk.py never reports absence as calm.
+MARINE_ZONE_TYPES = ("eez", "territorial_sea", "contiguous_zone")
+
+
+async def keep_points_at_sea(points: list[Point]) -> list[Point]:
+    """Filter to points inside India's maritime zones. Requires an open pool.
+
+    Falls back to returning every point, loudly, if no marine zone has been
+    loaded yet -- a masked-to-nothing ingest that silently writes no rows would
+    look exactly like a broken API, and jobs/ingest_zones.py may simply not have
+    been run.
+    """
+    from app.db import get_conn
+
+    async with get_conn() as conn, conn.cursor() as cur:
+        await cur.execute(
+            """
+            WITH sea AS (
+                SELECT ST_Union(geom) AS g
+                  FROM hazard_zones
+                 WHERE zone_type = ANY(%s)
+            )
+            SELECT p.i
+              FROM unnest(%s::int[], %s::float8[], %s::float8[]) AS p(i, lat, lon),
+                   sea
+             WHERE sea.g IS NOT NULL
+               AND ST_Contains(sea.g, ST_SetSRID(ST_MakePoint(p.lon, p.lat), 4326))
+            """,
+            (list(MARINE_ZONE_TYPES), list(range(len(points))),
+             [p.lat for p in points], [p.lon for p in points]),
+        )
+        keep = {r[0] for r in await cur.fetchall()}
+
+    if not keep:
+        log.warning(
+            "water mask matched no points: hazard_zones has no %s polygon. "
+            "Run jobs.ingest_zones first. Ingesting all %d points unmasked.",
+            "/".join(MARINE_ZONE_TYPES), len(points),
+        )
+        return points
+    return [p for i, p in enumerate(points) if i in keep]
 
 
 def aoi_selftest(points: tuple[Point, ...] = KERALA_TN_COAST) -> dict:

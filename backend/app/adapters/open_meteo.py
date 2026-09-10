@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
 from datetime import datetime, timezone
 from typing import Any, ClassVar
 
@@ -90,6 +91,35 @@ MAX_POINTS_PER_REQUEST = 50
 MAX_CONCURRENT_REQUESTS = 4
 
 REQUEST_TIMEOUT_S = 60.0
+
+# --- throttling ------------------------------------------------------------
+# Open-Meteo's free quota is WEIGHTED, not a plain request count: one call
+# costs roughly locations x variables, so a 50-point marine chunk (6 variables)
+# is worth ~300 of the 600-per-minute allowance and two of them in the same
+# second is already over. That never showed up on the 20-point demo AOI, which
+# is one chunk; the first real coverage run (2,160 cells, 44 chunks) took a 429
+# on chunk one and lost the whole job, because raise_for_status() treats a
+# throttle exactly like a permanent failure.
+#
+# A throttle is not an error. It is the server saying "later", and the only
+# correct response is to wait the interval it names and ask again.
+RETRY_STATUS = frozenset({408, 429, 500, 502, 503, 504})
+MAX_ATTEMPTS = 6
+BACKOFF_BASE_S = 4.0
+BACKOFF_CAP_S = 90.0
+
+
+def _retry_after(response: httpx.Response, attempt: int) -> float:
+    """Seconds to wait: the server's own Retry-After if it sent one, else
+    exponential backoff. Jittered so parallel chunks that were throttled
+    together do not all come back in the same instant and throttle again."""
+    hdr = response.headers.get("retry-after")
+    if hdr:
+        try:
+            return min(float(hdr), BACKOFF_CAP_S)
+        except ValueError:
+            pass
+    return min(BACKOFF_BASE_S * (2 ** attempt), BACKOFF_CAP_S) * (0.5 + random.random())
 
 
 class _OpenMeteoAdapter(Adapter, abstract=True):
@@ -157,7 +187,23 @@ class _OpenMeteoAdapter(Adapter, abstract=True):
 
             async def one(chunk: list[Point]) -> list[dict[str, Any]]:
                 async with sem:
-                    r = await client.get(self.endpoint, params=self._params(chunk))
+                    for attempt in range(MAX_ATTEMPTS):
+                        r = await client.get(self.endpoint, params=self._params(chunk))
+                        if r.status_code not in RETRY_STATUS:
+                            break
+                        if attempt == MAX_ATTEMPTS - 1:
+                            break
+                        delay = _retry_after(r, attempt)
+                        log.warning(
+                            "%s: HTTP %d on %d points, retrying in %.1fs "
+                            "(attempt %d/%d)",
+                            self.source_id, r.status_code, len(chunk), delay,
+                            attempt + 1, MAX_ATTEMPTS,
+                        )
+                        await asyncio.sleep(delay)
+                    # Still failing after the last wait: that is a real error.
+                    # Never fabricate or half-fill a chunk -- a coverage grid
+                    # with silent holes is worse than a job that stopped.
                     r.raise_for_status()
                     body = r.json()
                 # A single-point request returns an object, a multi-point
