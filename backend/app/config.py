@@ -114,6 +114,7 @@ class Settings(BaseSettings):
     # Provider keys. Only the one matching llm_provider is used.
     gemini_api_key: str | None = None
     openai_api_key: str | None = None
+    groq_api_key: str | None = None
 
     # Tier 2 sources (registration required). Optional: absence must not stop
     # the app booting, it only stops the adapters that need them.

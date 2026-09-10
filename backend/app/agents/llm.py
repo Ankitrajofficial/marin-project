@@ -49,7 +49,8 @@ log = logging.getLogger(__name__)
 T = TypeVar("T", bound=BaseModel)
 
 # Providers whose key we know how to find, and the env var that carries it.
-_KEY_ENV = {"gemini": "GEMINI_API_KEY", "openai": "OPENAI_API_KEY"}
+_KEY_ENV = {"gemini": "GEMINI_API_KEY", "openai": "OPENAI_API_KEY",
+            "groq": "GROQ_API_KEY"}
 
 
 class LLMError(RuntimeError):
@@ -73,7 +74,8 @@ class LLMUnavailable(LLMError):
 def _api_key() -> str:
     provider = settings.llm_provider
     key = {"gemini": settings.gemini_api_key,
-           "openai": settings.openai_api_key}.get(provider)
+           "openai": settings.openai_api_key,
+           "groq": settings.groq_api_key}.get(provider)
     if not key:
         env = _KEY_ENV.get(provider, f"{provider.upper()}_API_KEY")
         raise LLMUnavailable(
@@ -338,7 +340,7 @@ def _sampling() -> dict[str, Any]:
     Gemini's OpenAI-compatible endpoint takes temperature. Anthropic's 4.6+
     models reject it with a 400. Graph nodes must never have to know which.
     """
-    if settings.llm_provider in ("gemini", "openai"):
+    if settings.llm_provider in ("gemini", "openai", "groq"):
         return {"temperature": settings.llm_temperature}
     return {}
 
@@ -462,5 +464,6 @@ def provider_info() -> dict[str, Any]:
             "base_url": settings.llm_base_url,
             "key_env": _KEY_ENV.get(settings.llm_provider),
             "key_present": bool({"gemini": settings.gemini_api_key,
-                                 "openai": settings.openai_api_key}
+                                 "openai": settings.openai_api_key,
+                                 "groq": settings.groq_api_key}
                                 .get(settings.llm_provider))}
