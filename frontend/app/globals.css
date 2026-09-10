@@ -8,6 +8,9 @@
   --accent: #4da3d4;
   --sim: #c026d3;
   --warn: #e0a458;
+  --safe: #58b08a;
+  --danger: #d9534f;   /* HAZARD_STOPS 0.75 */
+  --nodata: #9aa0a6;   /* NO_DATA_COLOR in lib/color.ts */
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--text);
@@ -32,7 +35,7 @@ html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); color: 
 .slider .t { font-variant-numeric: tabular-nums; font-weight: 600; }
 .slider .muted { color: var(--muted); }
 
-.legend { position: absolute; right: 400px; top: 56px; z-index: 5; margin-right: 16px;
+.legend { position: absolute; right: 400px; top: 108px; z-index: 5; margin-right: 16px;
   padding: 10px 12px; width: 210px; }
 .legend h4 { margin: 0 0 8px; font-size: 12px; font-weight: 600; }
 .legend .bar { height: 10px; border-radius: 3px; margin-bottom: 4px;
@@ -86,7 +89,7 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 .warn { background: rgba(224,164,88,.12); border: 1px solid var(--warn);
   color: var(--warn); padding: 8px 10px; border-radius: 6px; font-size: 12px; margin: 10px 0; }
-.err { position: absolute; top: 56px; left: 16px; z-index: 7; padding: 10px 14px;
+.err { position: absolute; top: 108px; left: 16px; z-index: 7; padding: 10px 14px;
   border-color: #d9534f; color: #ffb4b4; max-width: 420px; }
 .hint { color: var(--muted); font-size: 12px; }
 
@@ -180,3 +183,41 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
   color: #4da3d4; text-decoration: underline; text-underline-offset: 2px;
 }
 .linkish:hover { color: #7cc4ea; }
+
+/* ---- plain-language verdict ------------------------------------------- */
+/* The line for the reader who opens no panel and reads no legend: someone
+   deciding whether to put a boat in the water. It sits above the legend
+   because the probability scale explains the map, while this says what the
+   map MEANS -- and only one of those is worth reading first.
+
+   Colour carries no information the words do not: level comes from the same
+   thresholds as the text, so a reader who cannot distinguish the border
+   colours loses nothing. */
+.verdict { position: absolute; top: 56px; left: 416px; right: 416px; z-index: 7;
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 14px; border: 1px solid var(--line); border-left-width: 5px;
+  border-radius: 8px; background: var(--panel);
+  font-size: 14px; font-weight: 650; line-height: 1.35; }
+/* Same shift the top bar and chat take, so the simulation banner never lands
+   on top of the verdict it is qualifying. */
+.shell.simulated .verdict { top: calc(56px + var(--simbar-h)); }
+.shell.simulated .legend,
+.shell.simulated .err { top: calc(108px + var(--simbar-h)); }
+
+.verdict-safe    { border-left-color: var(--safe);   color: #d3ecdf; }
+.verdict-caution { border-left-color: var(--warn);   color: #f5dcb4; }
+.verdict-danger  { border-left-color: var(--danger); color: #ffc9c7; }
+/* No data borrows the map's own grey, never the safe colour: the whole point
+   is that "we don't know" must not be read as "it's fine". */
+.verdict-unknown { border-left-color: var(--nodata); color: #ced4da; }
+
+.verdict-sim { flex: none; background: var(--sim); color: #fff;
+  padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  letter-spacing: .05em; }
+
+/* The verdict word and its number are ONE string, never two elements. There is
+   no arrangement of this markup that renders the word without the figure. */
+.verdict-text { min-width: 0; }
+
+/* Plain reading of the recall list, under the counts in the header. */
+.recall-read { color: var(--text); font-weight: 600; margin-top: 2px; }

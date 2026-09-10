@@ -9,6 +9,8 @@ import ChatPanel from "@/components/ChatPanel";
 import GeofencePanel from "@/components/GeofencePanel";
 import RecallPanel from "@/components/RecallPanel";
 import ScenarioControl from "@/components/ScenarioControl";
+import VerdictBanner from "@/components/VerdictBanner";
+import { recallSummary } from "@/lib/verdict";
 import { fetchGeofence, fetchRisk, fetchTimes, fetchTrace, fetchZones } from "@/lib/api";
 import type {
   CellTrace, GeofenceResponse, RecallEntry, RecallResponse,
@@ -203,24 +205,37 @@ export default function Page() {
         </div>
         <ScenarioControl onChanged={onScenarioChanged} />
         <div className="hint">
-          {risk ? `${risk.n_features} cells` : "…"}
-          {zones ? ` · ${zones.n_features} boundaries` : ""}
+          <div>
+            {risk ? `${risk.n_features} cells` : "…"}
+            {zones ? ` · ${zones.n_features} boundaries` : ""}
+            {recall && (
+              <>
+                {" · "}
+                {/* The recall list used to be reachable only by clicking the map
+                    first, because the panel that holds its tab opened on a
+                    position click. The prioritised recall list IS the disaster
+                    -management deliverable; it cannot be behind an undocumented
+                    gesture. */}
+                <button className="linkish" onClick={openRecall}>
+                  {recall.n_vessels} vessels — recall list
+                </button>
+              </>
+            )}
+            {" · click the map for a position check"}
+          </div>
+          {/* The count alone ("52 vessels") reads as inventory. The number that
+              decides whether anyone launches a boat is how many of them cannot
+              get in, so say that in words rather than leaving it one click
+              away inside the panel. */}
           {recall && (
-            <>
-              {" · "}
-              {/* The recall list used to be reachable only by clicking the map
-                  first, because the panel that holds its tab opened on a
-                  position click. The prioritised recall list IS the disaster
-                  -management deliverable; it cannot be behind an undocumented
-                  gesture. */}
-              <button className="linkish" onClick={openRecall}>
-                {recall.n_vessels} vessels — recall list
-              </button>
-            </>
+            <div className="recall-read">
+              {recallSummary(recall.ranked, recall.cannot_assess.length, recall.n_vessels)}
+            </div>
           )}
-          {" · click the map for a position check"}
         </div>
       </div>
+
+      <VerdictBanner risk={risk} />
 
       {error && <div className="card err">{error}</div>}
 
