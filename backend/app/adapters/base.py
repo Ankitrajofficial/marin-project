@@ -351,6 +351,22 @@ async def fetch_reliability(source_id: str) -> float:
     return float(row[0])
 
 
+async def write_observations(conn: Any, observations: Sequence[Observation]) -> int:
+    """Upsert observations on a caller-supplied connection.
+
+    Public and connection-taking so a writer that is NOT an Adapter can reuse
+    the exact same insert -- scenarios/ needs it, and must go through the same
+    Observation contract and the same SQL rather than growing a parallel path
+    that could drift.
+    """
+    written = 0
+    async with conn.cursor() as cur:
+        for batch in _batched(list(observations), INSERT_BATCH_SIZE):
+            await cur.executemany(_INSERT_SQL, [_as_row(o) for o in batch])
+            written += len(batch)
+    return written
+
+
 class Adapter(ABC):
     """Base class for every source translator.
 
@@ -429,12 +445,7 @@ class Adapter(ABC):
                     f"but is registered as {self.source_id!r}"
                 )
 
-        written = 0
         async with get_conn() as conn:
-            async with conn.cursor() as cur:
-                for batch in _batched(observations, INSERT_BATCH_SIZE):
-                    await cur.executemany(_INSERT_SQL, [_as_row(o) for o in batch])
-                    written += len(batch)
-
+            written = await write_observations(conn, observations)
         log.info("%s: wrote %d observations", self.source_id, written)
         return written

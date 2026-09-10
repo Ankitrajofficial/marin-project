@@ -182,3 +182,20 @@ export interface RecallResponse {
   simulated: boolean;
   caveats: string[];
 }
+
+// ---------------------------------------------------------------------------
+// Scenario control. `active` is non-optional so a component cannot render the
+// map without knowing whether what it is showing is synthetic.
+export interface ScenarioStatus {
+  active: boolean;
+  scenario_id: string | null;
+  name: string | null;
+  activated_at: string | null;
+  params: Record<string, unknown> | null;
+  counts: Record<string, number> | null;
+  scenario_observations: number;
+  masked_real_observations: number;
+  simulated_risk_cells: number;
+  available: string[];
+  warning: string | null;
+}

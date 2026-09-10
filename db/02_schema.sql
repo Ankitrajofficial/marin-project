@@ -240,6 +240,51 @@ CREATE TABLE IF NOT EXISTS advisory_chunks (
     -- decided when the first embeddings land. Exact search is fine until then.
 );
 
+-- ------------------------------------------------- scenario machinery
+-- Scenario injection lives entirely outside core/. core/ cannot tell a
+-- scenario row from a real one except by source_id -- which is the point, and
+-- also the danger: a scenario row and a real row for the same cell, variable
+-- and time would BOTH be read by risk.py and fused into a blend of a calm sea
+-- and a cyclone. A half-simulated hazard field is a forecast of nothing.
+--
+-- So overlapping real rows are MOVED ASIDE here for the life of the scenario
+-- and moved back when it is cleared. Not deleted (clearing must restore them),
+-- and not filtered on read (that would mean editing core/, which must stay
+-- untouched). The scenario is the only world inside its window because the
+-- real rows are physically not in `observations` while it runs.
+CREATE TABLE IF NOT EXISTS observations_masked (
+    scenario_id      TEXT NOT NULL,
+    masked_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    valid_time       TIMESTAMPTZ NOT NULL,
+    issued_time      TIMESTAMPTZ,
+    issued_time_kind TEXT,
+    h3_cell          TEXT NOT NULL,
+    variable         TEXT NOT NULL,
+    value            DOUBLE PRECISION,
+    unit             TEXT,
+    source_id        TEXT,
+    confidence       REAL,
+    geom             GEOMETRY(Point, 4326)
+);
+CREATE INDEX IF NOT EXISTS observations_masked_scenario_idx
+    ON observations_masked (scenario_id);
+
+CREATE TABLE IF NOT EXISTS scenario_runs (
+    scenario_id  TEXT PRIMARY KEY,
+    name         TEXT NOT NULL,
+    activated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    cleared_at   TIMESTAMPTZ,          -- NULL = currently active
+    params       JSONB,                -- track, intensity, fleet seed
+    counts       JSONB,                -- rows written / masked, for audit
+    vessel_ids   TEXT[]                -- exact ids to delete on clear, so
+                                       -- cleanup never guesses with LIKE
+);
+-- At most ONE active scenario, enforced by the database rather than by care.
+-- Two overlapping scenarios would mask each other's rows and neither could be
+-- cleanly restored.
+CREATE UNIQUE INDEX IF NOT EXISTS scenario_runs_one_active
+    ON scenario_runs ((cleared_at IS NULL)) WHERE cleared_at IS NULL;
+
 -- ---------------------------------------------------------- ingest_gaps
 -- Every period an ingest stream was NOT listening. A durable table, not a log
 -- line, because the question it answers is asked after the fact: "we have no

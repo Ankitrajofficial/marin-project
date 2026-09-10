@@ -1,6 +1,6 @@
 import type {
   CellTrace, ChatResponse, GeofenceResponse, RecallResponse,
-  RiskFeatureCollection, RiskTimes, ZoneFeatureCollection,
+  RiskFeatureCollection, RiskTimes, ScenarioStatus, ZoneFeatureCollection,
 } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
@@ -52,3 +52,21 @@ export async function sendChat(message: string, sessionId: string | null) {
 
 export const fetchRecall = (threshold = 0.05) =>
   get<RecallResponse>(`/api/recall?threshold=${threshold}`);
+
+export const fetchScenarioStatus = () =>
+  get<ScenarioStatus>("/api/scenario/status");
+
+async function post<T>(path: string): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, { method: "POST" });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try { detail = (await res.json()).detail ?? detail; } catch { /* non-JSON */ }
+    throw new Error(detail);
+  }
+  return res.json() as Promise<T>;
+}
+
+export const activateScenario = (name: string) =>
+  post<Record<string, unknown>>(`/api/scenario/${name}/activate`);
+export const clearScenario = () =>
+  post<Record<string, unknown>>("/api/scenario/clear");

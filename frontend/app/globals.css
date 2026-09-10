@@ -121,3 +121,21 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .tabs button { flex: 1; background: var(--panel-2); border: 1px solid var(--line);
   color: var(--muted); border-radius: 6px; padding: 6px; cursor: pointer; font: inherit; }
 .tabs button.on { background: var(--accent); color: #06121b; font-weight: 650; border-color: var(--accent); }
+
+/* ---- scenario control: visually separate, loud when running ---- */
+.scen { position: relative; }
+.scen-toggle { background: var(--panel); border: 1px dashed var(--line);
+  color: var(--muted); border-radius: 6px; padding: 5px 11px; cursor: pointer;
+  font: inherit; letter-spacing: .04em; }
+.scen-on .scen-toggle { background: var(--sim); border: 1px solid var(--sim);
+  color: #fff; font-weight: 700; }
+.scen-body { position: absolute; top: 34px; left: 0; width: 320px; z-index: 20;
+  padding: 12px; }
+.scen-warn { background: var(--sim); color: #fff; border-radius: 5px;
+  padding: 8px 10px; font-size: 11px; font-weight: 600; margin-bottom: 10px;
+  line-height: 1.5; }
+.scen-btn { width: 100%; margin-top: 10px; background: var(--accent); border: 0;
+  color: #06121b; font-weight: 650; border-radius: 6px; padding: 8px;
+  cursor: pointer; font: inherit; }
+.scen-btn.danger { background: var(--sim); color: #fff; }
+.scen-btn:disabled { opacity: .5; cursor: default; }

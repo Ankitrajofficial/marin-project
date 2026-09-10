@@ -32,6 +32,14 @@ INSERT INTO sources (source_id, name, access_mode, reliability, base_url, notes)
    'Tier 1. No key, open WFS. EEZ / territorial sea / treaty boundary lines '
    'incl. the India-Sri Lanka IMBL. CC-BY 4.0. ADVISORY ONLY: a scientific '
    'compilation, NOT Survey of India, no legal authority.'),
+  ('scenario_sim',      'Scenario simulation',      'api',    0.90,
+   NULL,
+   'SYNTHETIC. Injected by backend/app/scenarios/ for demonstration. '
+   'Reliability 0.90, NOT 0.0: reliability answers how much we believe a '
+   'source about the real world, and a scenario REPLACES the real world -- at '
+   '0.0 the weighted fusion would give it no weight and the injected cyclone '
+   'would be invisible. Visibility comes from this source_id, which flags '
+   'simulated=true on every risk cell, recall entry and trace derived from it.'),
   ('imd_cyclone',       'IMD Cyclone Bulletin',     'scrape', 0.95,
    'https://mausam.imd.gov.in/responsive/cycloneinformation.php',
    'Tier 3. No API, bulletin scrape. Authoritative -> high prior.')

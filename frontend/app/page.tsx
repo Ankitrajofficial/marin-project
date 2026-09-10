@@ -8,6 +8,7 @@ import Legend from "@/components/Legend";
 import ChatPanel from "@/components/ChatPanel";
 import GeofencePanel from "@/components/GeofencePanel";
 import RecallPanel from "@/components/RecallPanel";
+import ScenarioControl from "@/components/ScenarioControl";
 import { fetchGeofence, fetchRisk, fetchTimes, fetchTrace, fetchZones } from "@/lib/api";
 import type {
   CellTrace, GeofenceResponse, RecallEntry, RecallResponse,
@@ -31,6 +32,9 @@ export default function Page() {
   const [gfError, setGfError] = useState<string | null>(null);
 
   const [tab, setTab] = useState<"position" | "recall">("position");
+  // Bumped when a scenario is activated or cleared: every panel is showing a
+  // field that has just been replaced wholesale.
+  const [worldVersion, setWorldVersion] = useState(0);
   const [recall, setRecall] = useState<RecallResponse | null>(null);
   const [vessel, setVessel] = useState<RecallEntry | null>(null);
 
@@ -80,7 +84,7 @@ export default function Page() {
         .catch((e) => setError(e.message));
     }, 180);
     return () => { if (timer.current) clearTimeout(timer.current); };
-  }, [bbox, index, times]);
+  }, [bbox, index, times, worldVersion]);
 
   useEffect(() => {
     if (!selected || times.length === 0) { setTrace(null); return; }
@@ -95,7 +99,7 @@ export default function Page() {
   // boats inside it are visible together rather than in separate views.
   useEffect(() => {
     fetchRecall(0.05).then(setRecall).catch(() => setRecall(null));
-  }, []);
+  }, [worldVersion]);
 
   const onBboxChange = useCallback((b: Bbox) => setBbox(b), []);
   const onCellClick = useCallback((c: string) => setSelected(c), []);
@@ -141,6 +145,9 @@ export default function Page() {
         <div className="brand">
           ORCA <small>marine hazard field · Kerala–Tamil Nadu</small>
         </div>
+        <ScenarioControl onChanged={() => {
+          setWorldVersion((v) => v + 1); setVessel(null);
+        }} />
         <div className="hint">
           {risk ? `${risk.n_features} cells` : "…"}
           {zones ? ` · ${zones.n_features} boundaries` : ""}
