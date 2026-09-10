@@ -141,6 +141,43 @@ def schema_for(model: type[BaseModel]) -> dict[str, Any]:
 _RETRYABLE = {408, 409, 429, 500, 502, 503, 504}
 
 
+class _ModelSpent(Exception):
+    """This model cannot serve the request; the next one should be tried.
+
+    Distinct from LLMError: an LLMError is reported to the user and ends the
+    call, while this is an internal signal that says nothing about whether
+    ORCA can answer -- only about which model answers it.
+    """
+
+    def __init__(self, detail: str, *, daily: bool) -> None:
+        super().__init__(detail)
+        self.detail = detail
+        self.daily = daily
+
+
+def candidate_models() -> list[str]:
+    """The primary model followed by its fallbacks, in order, deduplicated."""
+    names = [settings.llm_model.strip()]
+    names += [m.strip() for m in settings.llm_fallback_models.split(",")]
+    seen: set[str] = set()
+    return [m for m in names if m and not (m in seen or seen.add(m))]
+
+
+def _is_daily_cap(response: httpx.Response) -> bool:
+    """Whether a 429 is a DAILY quota, not a per-minute one.
+
+    The difference decides the strategy completely. A per-minute 429 is worth
+    waiting out -- the allowance returns in seconds. A per-day 429 resets at
+    midnight Pacific, so every retry after it is dead time that ends in the
+    same error, and the only useful move is a different model. Google names it
+    in the quota violation: GenerateRequestsPerDayPerProjectPerModel-FreeTier.
+    """
+    try:
+        return "perday" in json.dumps(response.json()).lower().replace("_", "")
+    except Exception:
+        return False
+
+
 def _sleep_for(attempt: int, response: httpx.Response | None) -> float:
     """Backoff, preferring the server's own Retry-After.
 
@@ -179,10 +216,41 @@ async def _bounded_sleep(delay: float, started: float) -> None:
 
 
 async def _post(payload: dict[str, Any]) -> dict[str, Any]:
+    """Send a chat-completions request, trying each candidate model in turn.
+
+    The deadline is shared across the whole call, not granted afresh per
+    model: three models with a 120s budget each is a six-minute wait for
+    someone who was told 120s.
+    """
+    started = time.monotonic()
+    models = candidate_models()
+    failures: list[str] = []
+
+    for i, model in enumerate(models):
+        try:
+            return await _post_one(dict(payload, model=model), started)
+        except _ModelSpent as spent:
+            failures.append(f"{model}: {spent.detail}")
+            if i + 1 < len(models):
+                log.warning(
+                    "llm %s is %s; falling back to %s",
+                    model,
+                    "out of daily quota" if spent.daily else "unavailable",
+                    models[i + 1],
+                )
+
+    raise LLMError(
+        "Every configured language model is rate limited or unavailable "
+        "right now. The computed risk, routing and boundary data on the map "
+        "is unaffected — it never passes through a model.",
+        detail=" | ".join(failures),
+    )
+
+
+async def _post_one(payload: dict[str, Any], started: float) -> dict[str, Any]:
     url = settings.llm_base_url.rstrip("/") + "/chat/completions"
     headers = {"Authorization": f"Bearer {_api_key()}",
                "Content-Type": "application/json"}
-    started = time.monotonic()
     last: str = ""
 
     async with httpx.AsyncClient(timeout=settings.llm_timeout_s) as client:
@@ -240,26 +308,28 @@ async def _post(payload: dict[str, Any]) -> dict[str, Any]:
                 raise LLMError(
                     "The language model rejected the request.", detail=last
                 )
+            if r.status_code == 404:
+                # A retired or misspelled model name. Not retryable, and not
+                # fatal either -- the next candidate may well exist.
+                raise _ModelSpent(last, daily=False)
+
             if r.status_code not in _RETRYABLE:
                 raise LLMError("The language model returned an error.", detail=last)
 
+            # A daily cap does not lift by waiting. Spend no part of the
+            # deadline on it: hand straight over to the next model.
+            if r.status_code == 429 and _is_daily_cap(r):
+                raise _ModelSpent(last, daily=True)
+
             if attempt >= settings.llm_max_retries:
-                if r.status_code == 429:
-                    raise LLMError(
-                        "The language model is rate limited right now (free "
-                        "tier quota). Wait a minute and ask again — the "
-                        "computed risk and boundary data on the map is "
-                        "unaffected.",
-                        detail=last,
-                    )
-                raise LLMError("The language model is unavailable.", detail=last)
+                raise _ModelSpent(last, daily=False)
 
             delay = _sleep_for(attempt, r)
             log.warning("llm %s -> retrying in %.1fs (attempt %d/%d)",
                         r.status_code, delay, attempt + 1, settings.llm_max_retries)
             await _bounded_sleep(delay, started)
 
-    raise LLMError("The language model is unavailable.", detail=last)
+    raise _ModelSpent(last or "no response", daily=False)
 
 
 def _sampling() -> dict[str, Any]:
@@ -273,9 +343,14 @@ def _sampling() -> dict[str, Any]:
     return {}
 
 
-def _usage(body: dict[str, Any]) -> dict[str, int]:
+def _usage(body: dict[str, Any]) -> dict[str, Any]:
+    # "model" is the model that ACTUALLY answered, read back from the
+    # response rather than assumed from config. With a fallback chain those
+    # two can differ, and the trace is the one place in this system that must
+    # never say something it did not verify.
     u = body.get("usage") or {}
-    return {"input_tokens": u.get("prompt_tokens", 0),
+    return {"model": body.get("model") or settings.llm_model,
+            "input_tokens": u.get("prompt_tokens", 0),
             "output_tokens": u.get("completion_tokens", 0)}
 
 
@@ -306,7 +381,7 @@ def _loads(text: str) -> Any:
 # Public interface -- the only two things the rest of ORCA may call
 # ---------------------------------------------------------------------------
 async def plan(prompt: str, schema: type[T], *, system: str = "",
-               history: list[dict[str, str]] | None = None) -> tuple[T, dict[str, int]]:
+               history: list[dict[str, str]] | None = None) -> tuple[T, dict[str, Any]]:
     """Structured extraction. Returns a validated `schema` instance and usage.
 
     Tries strict json_schema mode, falls back to json_object with the schema in
@@ -321,7 +396,7 @@ async def plan(prompt: str, schema: type[T], *, system: str = "",
     messages.extend(history or [])
     messages.append({"role": "user", "content": prompt})
 
-    base = {"model": settings.llm_model, "messages": messages,
+    base = {"messages": messages,
             "max_tokens": settings.llm_max_tokens, **_sampling()}
 
     modes: list[dict[str, Any]] = []
@@ -368,7 +443,7 @@ async def plan(prompt: str, schema: type[T], *, system: str = "",
     raise last_error or LLMError("The language model returned no usable plan.")
 
 
-async def verbalize(prompt: str, context: str, *, system: str = "") -> tuple[str, dict[str, int]]:
+async def verbalize(prompt: str, context: str, *, system: str = "") -> tuple[str, dict[str, Any]]:
     """Free text. `context` is the verified material the answer must stay
     inside; guards.py checks afterwards that it did.
     """
@@ -377,7 +452,7 @@ async def verbalize(prompt: str, context: str, *, system: str = "") -> tuple[str
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": f"{prompt}\n\n{context}".strip()})
 
-    body = await _post({"model": settings.llm_model, "messages": messages,
+    body = await _post({"messages": messages,
                         "max_tokens": settings.llm_max_tokens, **_sampling()})
     return _content(body), _usage(body)
 

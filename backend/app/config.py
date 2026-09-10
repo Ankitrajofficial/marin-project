@@ -77,6 +77,19 @@ class Settings(BaseSettings):
     #
     # Override with LLM_MODEL in .env; llm_base_url stays the same.
     llm_model: str = "gemini-3.1-flash-lite"
+    #: Models to fall back to, in order, when the one above cannot serve the
+    #: request. Comma-separated; set LLM_FALLBACK_MODELS to change, or to ""
+    #: to disable fallback entirely.
+    #:
+    #: The free-tier daily cap is per project PER MODEL, so this is not
+    #: redundancy against an outage -- it is three separate daily budgets. When
+    #: the primary is spent, waiting cannot help: the quota resets at midnight
+    #: Pacific, not in thirty seconds. Another model can answer immediately.
+    #:
+    #: Ordered cheapest-capable first. Every one of them is doing the same
+    #: small job, and guards.py checks the output identically whichever
+    #: answers, so falling back costs nothing in correctness.
+    llm_fallback_models: str = "gemini-3-flash-preview,gemini-3.6-flash"
     #: OpenAI-compatible endpoint. Gemini exposes one, so llm.py speaks a
     #: single wire format and any OpenAI-compatible provider drops in.
     llm_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai"

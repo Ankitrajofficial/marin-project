@@ -167,7 +167,7 @@ async def understand(state: AgentState) -> AgentState:
     )
 
     state["plan"] = plan.model_dump()
-    _step(state, node="understand", model=settings.llm_model,
+    _step(state, node="understand", model=usage.get("model", settings.llm_model),
           input={"question": state["question"], "history_turns": len(history)},
           output=plan.model_dump(),
           duration_ms=round((time.perf_counter() - t0) * 1000),
@@ -233,7 +233,7 @@ async def synthesize(state: AgentState) -> AgentState:
     )
 
     state["answer"] = text
-    _step(state, node="synthesize", model=settings.llm_model,
+    _step(state, node="synthesize", model=usage.get("model", settings.llm_model),
           input={"findings": state["findings_text"],
                  "retry_feedback": state.get("guard_feedback")},
           output={"answer": text},
