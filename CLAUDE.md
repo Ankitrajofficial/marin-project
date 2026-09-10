@@ -125,8 +125,6 @@ Two flags, deliberately separate, because conflating them misrepresents:
                            official warning is nearby.
 Expired warnings are excluded everywhere by valid_until: an expired warning
 served as current is worse than none, because it looks like live information.
-The adapter layer exists because these tiers differ in format, units,
-time convention and access model. That normalization is a feature.
 
 ## Boundaries are advisory, never legal
 Geofencing uses open data: MarineRegions/VLIZ (CC-BY 4.0) for the IMBL, EEZ,
