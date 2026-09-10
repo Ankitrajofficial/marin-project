@@ -3,7 +3,12 @@ import type {
   RiskFeatureCollection, RiskTimes, ScenarioStatus, ZoneFeatureCollection,
 } from "./types";
 
-const BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
+// Empty string = same origin: every request below becomes a relative URL, and
+// next.config.mjs rewrites /api/* to the FastAPI process. One port, no CORS.
+//
+// Set NEXT_PUBLIC_API_BASE only to point the browser straight at a backend on
+// another origin (which then needs that origin in the API's CORS allow-list).
+const BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`);
