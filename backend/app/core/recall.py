@@ -129,15 +129,29 @@ class RecallEntry:
 
     harbour: HarbourChoice | None
     time_to_harbour_h: float | None
+    #: True when time_to_harbour came from a real routed path; False when it
+    #: fell back to great-circle x DETOUR_FACTOR. Per-entry, because after
+    #: routing exists the caveat belongs on the specific vessels that still
+    #: need it, not on the whole response.
+    time_is_routed: bool = False
+    route_cells: list[str] = field(default_factory=list)
+    route_coordinates: list[list[float]] = field(default_factory=list)
+    route_distance_nm: float | None = None
+    route_exposure: float | None = None
+    route_max_hazard: float | None = None
+    route_blocked_reason: str | None = None
+    route_waiting_might_help: bool = False
+    #: Nothing checks depth along the route. Surfaced, never assumed.
+    under_keel_checked: bool = False
 
-    time_to_hazard_h: float | None
-    hazard_time: datetime | None
-    hazard_prob_at_crossing: float | None
-    hazard_driver: str | None
-    hazard_data_age_s: float | None
+    time_to_hazard_h: float | None = None
+    hazard_time: datetime | None = None
+    hazard_prob_at_crossing: float | None = None
+    hazard_driver: str | None = None
+    hazard_data_age_s: float | None = None
 
-    margin_h: float | None
-    status: str                  # 'ranked' | 'cannot_assess'
+    margin_h: float | None = None
+    status: str = "ranked"       # 'ranked' | 'cannot_assess'
     reasons: list[str] = field(default_factory=list)
     flags: list[str] = field(default_factory=list)
     simulated: bool = False
@@ -147,54 +161,35 @@ class RecallEntry:
 # ---------------------------------------------------------------------------
 # Pieces
 # ---------------------------------------------------------------------------
-def choose_harbour(lat: float, lon: float, draft_m: float | None,
-                   harbours: list[dict[str, Any]]) -> tuple[HarbourChoice | None, list[str]]:
-    """Nearest harbour the vessel can plausibly enter.
+def rank_harbours(lat: float, lon: float, draft_m: float | None,
+                  harbours: list[dict[str, Any]], limit: int = 4
+                  ) -> list[HarbourChoice]:
+    """Candidate harbours, nearest first.
 
-    Depth logic, and the reason this function returns notes:
-
-      * harbour depth known AND vessel draft known -> a real check.
-      * either unknown -> the harbour stays a CANDIDATE, marked draft_ok=None,
-        and the vessel carries a flag. It is not silently accepted as suitable
-        and it is not silently discarded. OSM tags no depth for any harbour in
-        our AOI, so today this is the normal path, not the exception.
-
-    Shipyards are excluded: they are repair facilities, not shelter.
+    More than one because the nearest harbour may have no ROUTE to it -- the
+    storm, a boundary or the coastline can be in the way -- and a vessel that
+    cannot reach its closest shelter is not a vessel with no shelter.
     """
-    notes: list[str] = []
-    best: HarbourChoice | None = None
-
+    out: list[HarbourChoice] = []
     for h in harbours:
         if h.get("harbour_type") == "shipyard":
             continue
         depth_m = h.get("depth_m")
         if depth_m is not None and draft_m is not None:
-            draft_ok = depth_m > draft_m
-            if not draft_ok:
-                continue           # a real, checkable exclusion
+            if depth_m <= draft_m:
+                continue
+            draft_ok: bool | None = True
         else:
-            draft_ok = None        # unverifiable -- NOT True
-
-        d_nm = haversine_m(lat, lon, h["lat"], h["lon"]) / METRES_PER_NM
-        if best is None or d_nm < best.distance_nm:
-            best = HarbourChoice(
-                harbour_id=h["harbour_id"], name=h["name"],
-                lat=h["lat"], lon=h["lon"],
-                harbour_type=h.get("harbour_type"),
-                distance_nm=d_nm, depth_source=h.get("depth_source", "unknown"),
-                depth_m=depth_m, draft_ok=draft_ok,
-            )
-
-    if best is None:
-        notes.append("no candidate harbour found")
-    elif best.draft_ok is None:
-        if draft_m is None:
-            notes.append("vessel draught unknown (no AIS static message), so "
-                         "harbour suitability is unverified")
-        else:
-            notes.append(f"{best.name} has no charted depth in OpenStreetMap, "
-                         f"so it is unverified for a {draft_m} m draught")
-    return best, notes
+            draft_ok = None
+        out.append(HarbourChoice(
+            harbour_id=h["harbour_id"], name=h["name"], lat=h["lat"], lon=h["lon"],
+            harbour_type=h.get("harbour_type"),
+            distance_nm=haversine_m(lat, lon, h["lat"], h["lon"]) / METRES_PER_NM,
+            depth_source=h.get("depth_source", "unknown"), depth_m=depth_m,
+            draft_ok=draft_ok,
+        ))
+    out.sort(key=lambda c: c.distance_nm)
+    return out[:limit]
 
 
 def effective_speed(sog_samples: list[float], class_default: float | None
@@ -235,8 +230,15 @@ def first_hazard_crossing(steps: list[dict[str, Any]], threshold: float
 def assess(vessel: dict[str, Any], harbours: list[dict[str, Any]],
            risk_steps: list[dict[str, Any]], sog_samples: list[float],
            now: datetime, threshold: float = DEFAULT_THRESHOLD,
-           horizon_end: datetime | None = None) -> RecallEntry:
-    """Everything for one vessel. Pure: `now` is passed in, nothing is fetched."""
+           horizon_end: datetime | None = None,
+           route_fn: Any = None) -> RecallEntry:
+    """Everything for one vessel. Pure: `now` is passed in, nothing is fetched.
+
+    `route_fn(from_cell, to_cell, speed_ms, draft_m)` -> RouteResult | None is
+    injected rather than imported so this function stays testable and free of
+    database access. When it is supplied, time_to_harbour is the REAL routed
+    time and the straight-line caveat no longer applies to this vessel.
+    """
     flags: list[str] = []
     reasons: list[str] = []
 
@@ -258,15 +260,65 @@ def assess(vessel: dict[str, Any], harbours: list[dict[str, Any]],
             f"could be up to {uncertainty_nm:.1f} NM from this position"
         )
 
-    harbour, harbour_notes = choose_harbour(
-        vessel["lat"], vessel["lon"], vessel.get("draft_m"), harbours)
-    reasons.extend(harbour_notes)
+    candidates = rank_harbours(vessel["lat"], vessel["lon"],
+                               vessel.get("draft_m"), harbours)
+    harbour: HarbourChoice | None = candidates[0] if candidates else None
+    tth_h = None
+    routed = False
+    route_cells: list[str] = []
+    route_coords: list[list[float]] = []
+    route_dist = route_exp = route_maxp = None
+    route_blocked: str | None = None
+    route_waiting = False
+
+    if not candidates:
+        reasons.append("no candidate harbour found")
+    else:
+        if route_fn is not None:
+            # Try the nearest harbours in order: the closest shelter may have
+            # no route to it, and that is not the same as having no shelter.
+            for cand in candidates:
+                r = route_fn(vessel["h3_cell"], cand, speed, vessel.get("draft_m"))
+                if r is None:
+                    continue
+                if r.found:
+                    harbour = cand
+                    tth_h = r.duration_h
+                    routed = True
+                    route_cells = r.cells
+                    route_coords = r.coordinates
+                    route_dist = r.distance_nm
+                    route_exp = r.hazard_exposure
+                    route_maxp = r.max_hazard_on_route
+                    break
+                # Remember why the NEAREST one failed, for the report.
+                if route_blocked is None:
+                    route_blocked = f"{cand.name}: {r.blocked_reason}"
+                    route_waiting = r.waiting_might_help
+        if not routed:
+            # Straight-line fallback. OPTIMISTIC -- a real track is longer --
+            # so the vessel is flagged rather than the whole response.
+            harbour = candidates[0]
+            tth_h = (harbour.distance_nm * DETOUR_FACTOR * METRES_PER_NM) / speed / 3600.0
+            if route_fn is not None:
+                flags.append("no_route_found")
+                reasons.append(
+                    "no safe route to any candidate harbour; the time below is "
+                    "a straight-line estimate and is OPTIMISTIC"
+                    + (f" ({route_blocked})" if route_blocked else "")
+                )
+            else:
+                flags.append("straight_line_estimate")
+
     if harbour and harbour.draft_ok is None:
         flags.append("draft_unverified")
-
-    tth_h = None
-    if harbour:
-        tth_h = (harbour.distance_nm * DETOUR_FACTOR * METRES_PER_NM) / speed / 3600.0
+        if vessel.get("draft_m") is None:
+            reasons.append("vessel draught unknown (no AIS static message), so "
+                           "harbour suitability is unverified")
+        else:
+            reasons.append(f"{harbour.name} has no charted depth in "
+                           f"OpenStreetMap, so it is unverified for a "
+                           f"{vessel['draft_m']} m draught")
 
     hazard_time, hazard_p, driver = first_hazard_crossing(risk_steps, threshold)
     hazard_age_s = None
@@ -320,6 +372,12 @@ def assess(vessel: dict[str, Any], harbours: list[dict[str, Any]],
         position_uncertainty_nm=uncertainty_nm,
         speed_ms=speed, speed_source=speed_source, speed_samples=n_samples,
         harbour=harbour, time_to_harbour_h=tth_h,
+        time_is_routed=routed, route_cells=route_cells,
+        route_coordinates=route_coords, route_distance_nm=route_dist,
+        route_exposure=route_exp, route_max_hazard=route_maxp,
+        route_blocked_reason=route_blocked,
+        route_waiting_might_help=route_waiting,
+        under_keel_checked=False,
         time_to_hazard_h=time_to_hazard_h, hazard_time=hazard_time,
         hazard_prob_at_crossing=hazard_p, hazard_driver=driver,
         hazard_data_age_s=hazard_age_s,
@@ -456,11 +514,12 @@ async def gather(conn: Any, now: datetime,
 
 
 def build(inputs: dict[str, Any], now: datetime,
-          threshold: float = DEFAULT_THRESHOLD
+          threshold: float = DEFAULT_THRESHOLD, route_fn: Any = None
           ) -> tuple[list[RecallEntry], list[RecallEntry]]:
     entries = [
         assess(v, inputs["harbours"], inputs["risk"].get(v["h3_cell"], []),
-               inputs["sog"].get(v["mmsi"], []), now, threshold)
+               inputs["sog"].get(v["mmsi"], []), now, threshold,
+               route_fn=route_fn)
         for v in inputs["vessels"] if v.get("h3_cell")
     ]
     return rank(entries)

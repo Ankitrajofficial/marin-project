@@ -248,6 +248,18 @@ class RecallEntryOut(BaseModel):
 
     harbour: HarbourOut | None
     time_to_harbour_h: float | None
+    #: True when time_to_harbour is a REAL routed time. False means it fell
+    #: back to straight-line x detour and is optimistic -- per vessel, so the
+    #: caveat sits on the entries that still deserve it.
+    time_is_routed: bool
+    route_coordinates: list[list[float]] = Field(default_factory=list)
+    route_distance_nm: float | None = None
+    route_exposure: float | None = None
+    route_max_hazard: float | None = None
+    route_blocked_reason: str | None = None
+    route_waiting_might_help: bool = False
+    #: Required. Nothing checks depth along the route.
+    under_keel_checked: bool
     time_to_hazard_h: float | None
     hazard_time: datetime | None
     hazard_prob_at_crossing: float | None
@@ -272,6 +284,14 @@ class RecallResponse(BaseModel):
 
     n_vessels: int
     n_harbours: int
+    #: How many entries used a real routed time vs the straight-line fallback.
+    n_routed: int = 0
+    n_straight_line: int = 0
+    routing_available: bool = False
+    routing_graph_cells: int = 0
+    routing_build_ms: int = 0
+    #: Required. No route in this system checks under-keel clearance.
+    under_keel_checked: bool = False
     #: Ranked ascending by margin -- smallest slack first.
     ranked: list[RecallEntryOut]
     #: NEVER merged into `ranked`. A vessel that could not be evaluated must

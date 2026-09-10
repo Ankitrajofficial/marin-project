@@ -140,8 +140,15 @@ export default function MapView({
       m.addLayer({
         id: "route-line", type: "line", source: "route",
         filter: ["==", ["geometry-type"], "LineString"],
-        paint: { "line-color": "#ffd60a", "line-width": 2,
-                 "line-dasharray": [2, 2] },
+        // Solid = a real routed track. Dashed = a straight-line ESTIMATE,
+        // because drawing an estimate solid would imply a plan that does not
+        // exist.
+        paint: {
+          "line-color": "#ffd60a",
+          "line-width": ["case", ["get", "routed"], 3, 2],
+          "line-dasharray": ["case", ["get", "routed"],
+            ["literal", [1, 0]], ["literal", [2, 2]]],
+        },
       });
       // How far the vessel could actually be, given the age of its last fix.
       m.addLayer({
@@ -272,13 +279,19 @@ export default function MapView({
     const rs = m.getSource("route") as maplibregl.GeoJSONSource | undefined;
     if (rs) {
       const v = selectedVessel;
+      // A real routed path when routing found one; otherwise the straight
+      // line, which the dashed style marks as an estimate rather than a track.
+      const line = v
+        ? (v.route_coordinates.length > 1
+            ? v.route_coordinates
+            : (v.harbour ? [[v.lon, v.lat], [v.harbour.lon, v.harbour.lat]] : []))
+        : [];
       rs.setData({
         type: "FeatureCollection",
-        features: v && v.harbour ? [
+        features: v && v.harbour && line.length > 1 ? [
           { type: "Feature" as const,
-            geometry: { type: "LineString" as const,
-              coordinates: [[v.lon, v.lat], [v.harbour.lon, v.harbour.lat]] },
-            properties: {} },
+            geometry: { type: "LineString" as const, coordinates: line },
+            properties: { routed: v.time_is_routed } },
           { type: "Feature" as const,
             geometry: { type: "Point" as const,
               coordinates: [v.harbour.lon, v.harbour.lat] },

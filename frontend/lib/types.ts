@@ -164,6 +164,15 @@ export interface RecallEntry {
   speed_ms: number; speed_source: string; speed_samples: number;
   harbour: RecallHarbour | null;
   time_to_harbour_h: number | null;
+  // true = a real routed time; false = straight-line x1.25, optimistic.
+  time_is_routed: boolean;
+  route_coordinates: number[][];
+  route_distance_nm: number | null;
+  route_exposure: number | null;
+  route_max_hazard: number | null;
+  route_blocked_reason: string | null;
+  route_waiting_might_help: boolean;
+  under_keel_checked: boolean;
   time_to_hazard_h: number | null;
   hazard_time: string | null;
   hazard_prob_at_crossing: number | null;
@@ -177,6 +186,9 @@ export interface RecallResponse {
   generated_at: string; threshold: number; detour_factor: number;
   distance_is_straight_line: boolean;
   n_vessels: number; n_harbours: number;
+  n_routed: number; n_straight_line: number;
+  routing_available: boolean; routing_graph_cells: number;
+  routing_build_ms: number; under_keel_checked: boolean;
   ranked: RecallEntry[];
   cannot_assess: RecallEntry[];
   simulated: boolean;

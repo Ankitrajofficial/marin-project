@@ -7,6 +7,7 @@ caveats that make a thin result readable as thin data rather than good news.
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query
@@ -19,6 +20,8 @@ from app.core.recall import (
     build,
     gather,
 )
+from app.core.routing import VesselConstraints, build_graph, find_route
+from app.core.grid import cell_for
 from app.db import get_conn
 
 log = logging.getLogger(__name__)
@@ -48,6 +51,14 @@ def _out(e: RecallEntry) -> RecallEntryOut:
             draft_ok=e.harbour.draft_ok,
         ) if e.harbour else None,
         time_to_harbour_h=round(e.time_to_harbour_h, 2) if e.time_to_harbour_h is not None else None,
+        time_is_routed=e.time_is_routed,
+        route_coordinates=e.route_coordinates,
+        route_distance_nm=e.route_distance_nm,
+        route_exposure=e.route_exposure,
+        route_max_hazard=e.route_max_hazard,
+        route_blocked_reason=e.route_blocked_reason,
+        route_waiting_might_help=e.route_waiting_might_help,
+        under_keel_checked=e.under_keel_checked,
         time_to_hazard_h=round(e.time_to_hazard_h, 2) if e.time_to_hazard_h is not None else None,
         hazard_time=e.hazard_time,
         hazard_prob_at_crossing=e.hazard_prob_at_crossing,
@@ -78,7 +89,27 @@ async def recall(
     now = datetime.now(timezone.utc)
     async with get_conn() as conn:
         inputs = await gather(conn, now, bbox=box, lookback_h=lookback_h)
-        ranked, unknown = build(inputs, now, threshold)
+
+        # Build the routing graph once and route every vessel against it.
+        # Timing is reported: if this becomes too slow for the fleet size, the
+        # number is visible rather than the search being quietly reduced.
+        t0 = time.perf_counter()
+        graph = await build_graph(conn, now)
+        build_ms = round((time.perf_counter() - t0) * 1000)
+
+        def route_fn(from_cell, harbour, speed_ms, draft_m):
+            if not graph.navigable:
+                return None
+            to_cell = cell_for(harbour.lat, harbour.lon)
+            graph.goal_exempt.add(to_cell)
+            return find_route(graph, from_cell, to_cell, now,
+                              VesselConstraints(speed_ms=speed_ms,
+                                                draft_m=draft_m))
+
+        t1 = time.perf_counter()
+        ranked, unknown = build(inputs, now, threshold,
+                                route_fn=route_fn if graph.navigable else None)
+        route_ms = round((time.perf_counter() - t1) * 1000)
 
     caveats: list[str] = []
     n_vessels = len(inputs["vessels"])
@@ -107,17 +138,38 @@ async def recall(
             "No harbour in the database has a charted depth, so draught "
             "compatibility is unverified for every vessel."
         )
-    caveats.append(
-        f"Distances are straight-line x{DETOUR_FACTOR} standing in for a real "
-        f"route. A real track is longer, so every margin here is optimistic "
-        f"until core/routing.py replaces it."
-    )
-
     all_entries = ranked + unknown
+    n_routed = sum(1 for e in all_entries if e.time_is_routed)
+    n_straight = len(all_entries) - n_routed
+
+    if n_straight:
+        # The caveat now names the vessels it applies to instead of blanketing
+        # the whole response.
+        caveats.append(
+            f"{n_straight} of {len(all_entries)} vessel(s) have no safe route "
+            f"to any candidate harbour; their times are straight-line "
+            f"x{DETOUR_FACTOR} estimates and are OPTIMISTIC. They are flagged "
+            f"no_route_found individually."
+        )
+    if n_routed:
+        caveats.append(
+            f"{n_routed} vessel(s) use a real routed time from core/routing.py, "
+            f"planned against the moving hazard field with maritime boundaries "
+            f"as hard constraints."
+        )
+    caveats.append(
+        "No route checks under-keel clearance. Draught is checked against the "
+        "destination harbour only; depth along the track is not verified."
+    )
     return RecallResponse(
         generated_at=now, threshold=threshold, detour_factor=DETOUR_FACTOR,
-        distance_is_straight_line=True,
+        distance_is_straight_line=n_straight > 0,
         n_vessels=n_vessels, n_harbours=len(inputs["harbours"]),
+        n_routed=n_routed, n_straight_line=n_straight,
+        routing_available=bool(graph.navigable),
+        routing_graph_cells=len(graph.navigable),
+        routing_build_ms=build_ms + route_ms,
+        under_keel_checked=False,
         ranked=[_out(e) for e in ranked],
         cannot_assess=[_out(e) for e in unknown],
         simulated=any(e.simulated for e in all_entries),

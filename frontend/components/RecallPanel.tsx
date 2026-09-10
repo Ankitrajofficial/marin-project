@@ -33,9 +33,14 @@ function Row({ e, selected, onSelect }: {
       </div>
       {e.harbour && (
         <div className="cell">
-          → {e.harbour.name} ({e.harbour.distance_nm} NM)
+          → {e.harbour.name} (
+          {e.time_is_routed && e.route_distance_nm !== null
+            ? `${e.route_distance_nm} NM routed`
+            : `${e.harbour.distance_nm} NM straight-line`}
+          )
           {/* draft_ok === null means unverifiable. Never a tick. */}
           {e.harbour.draft_ok === null && " · depth unverified"}
+          {!e.time_is_routed && " · NO SAFE ROUTE"}
         </div>
       )}
       {selected && (
@@ -60,6 +65,20 @@ function Row({ e, selected, onSelect }: {
           {e.hazard_data_age_minutes !== null && (
             <div>hazard data {e.hazard_data_age_minutes.toFixed(0)} min old</div>
           )}
+          {e.time_is_routed ? (
+            <div>
+              routed track · exposure <b>{e.route_exposure}</b> prob-hours ·
+              peak hazard on route <b>{e.route_max_hazard}</b>
+            </div>
+          ) : (
+            <div>
+              <b>no safe route</b> — time shown is a straight-line estimate and
+              is optimistic
+              {e.route_waiting_might_help &&
+                " · blocked by hazard, which moves: waiting may change this (not computed)"}
+            </div>
+          )}
+          <div>under-keel clearance along the track: <b>not checked</b></div>
           {e.reasons.map((r) => <div key={r}>· {r}</div>)}
           {e.flags.length > 0 && <div className="cell">flags: {e.flags.join(", ")}</div>}
         </div>
@@ -105,8 +124,10 @@ export default function RecallPanel({
       </label>
 
       <div className="cell" style={{ marginBottom: 10 }}>
-        {data.n_vessels} vessel(s) · {data.n_harbours} harbours ·
-        straight-line ×{data.detour_factor}
+        {data.n_vessels} vessel(s) · {data.n_harbours} harbours ·{" "}
+        {data.routing_available
+          ? `${data.n_routed} routed / ${data.n_straight_line} no route · ${data.routing_graph_cells} cells in ${data.routing_build_ms} ms`
+          : `routing unavailable · straight-line ×${data.detour_factor}`}
       </div>
 
       {data.ranked.map((e) => (
