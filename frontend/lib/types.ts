@@ -169,6 +169,11 @@ export interface RecallHarbour {
   depth_source: string; depth_m: number | null;
   // null = UNVERIFIABLE, not true. Must never render as a tick.
   draft_ok: boolean | null;
+  // 'incois_lc' = official Indian fishing landing centre; 'osm_harbours' = OSM.
+  source_id: string | null;
+  // Set when the source is a frozen snapshot rather than a live feed.
+  snapshot_date: string | null;
+  data_age_days: number | null;
 }
 
 export interface RecallEntry {

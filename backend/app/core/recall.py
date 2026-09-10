@@ -106,6 +106,14 @@ class HarbourChoice:
     depth_source: str
     depth_m: float | None
     draft_ok: bool | None        # None = unverifiable, NOT True
+    #: Which dataset this destination came from, so a trace can say whether
+    #: it chose an INCOIS landing centre or an OSM harbour.
+    source_id: str | None = None
+    #: Set when the source is a frozen snapshot rather than a live feed. The
+    #: INCOIS landing-centre layer is fixed at 2024-04-27; locations barely
+    #: move, but the age is reported rather than presented as current.
+    snapshot_date: str | None = None
+    data_age_days: float | None = None
 
 
 @dataclass(slots=True)
@@ -181,12 +189,30 @@ def rank_harbours(lat: float, lon: float, draft_m: float | None,
             draft_ok: bool | None = True
         else:
             draft_ok = None
+        meta = h.get("meta") or {}
+        snapshot = meta.get("snapshot_date")
+        # Age from the snapshot date when the source is frozen, otherwise from
+        # when we fetched it. A snapshot's real age is its content date, not
+        # the moment we downloaded it again.
+        age_days = None
+        if snapshot:
+            try:
+                snap = datetime.fromisoformat(snapshot).replace(tzinfo=timezone.utc)
+                age_days = round((datetime.now(timezone.utc) - snap).days, 1)
+            except ValueError:
+                pass
+        elif h.get("fetched_at"):
+            age_days = round(
+                (datetime.now(timezone.utc) - h["fetched_at"]).total_seconds()
+                / 86400.0, 2)
+
         out.append(HarbourChoice(
             harbour_id=h["harbour_id"], name=h["name"], lat=h["lat"], lon=h["lon"],
             harbour_type=h.get("harbour_type"),
             distance_nm=haversine_m(lat, lon, h["lat"], h["lon"]) / METRES_PER_NM,
             depth_source=h.get("depth_source", "unknown"), depth_m=depth_m,
-            draft_ok=draft_ok,
+            draft_ok=draft_ok, source_id=h.get("source_id"),
+            snapshot_date=snapshot, data_age_days=age_days,
         ))
     out.sort(key=lambda c: c.distance_nm)
     return out[:limit]
@@ -434,7 +460,8 @@ SELECT mmsi, array_agg(sog ORDER BY ts DESC)
 """
 
 _HARBOURS = """
-SELECT harbour_id, name, lat, lon, depth_m, depth_source, harbour_type
+SELECT harbour_id, name, lat, lon, depth_m, depth_source, harbour_type,
+       source_id, fetched_at, meta
   FROM harbours
 """
 
@@ -483,7 +510,7 @@ async def gather(conn: Any, now: datetime,
 
         await cur.execute(_HARBOURS)
         hcols = ("harbour_id", "name", "lat", "lon", "depth_m", "depth_source",
-                 "harbour_type")
+                 "harbour_type", "source_id", "fetched_at", "meta")
         harbours = [dict(zip(hcols, r)) for r in await cur.fetchall()]
 
         cells = sorted({v["h3_cell"] for v in vessels if v["h3_cell"]})

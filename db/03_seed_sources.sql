@@ -32,6 +32,16 @@ INSERT INTO sources (source_id, name, access_mode, reliability, base_url, notes)
    'Tier 1. No key, open WFS. EEZ / territorial sea / treaty boundary lines '
    'incl. the India-Sri Lanka IMBL. CC-BY 4.0. ADVISORY ONLY: a scientific '
    'compilation, NOT Survey of India, no legal authority.'),
+  ('incois_lc',         'INCOIS landing centres',   'api',    0.95,
+   'https://incois.gov.in/geoserver/PFZ_LandingCentres/wfs',
+   'Tier 2.5, VERIFIED via workspace-scoped WFS (top-level WFS is 403). '
+   'Official INCOIS fishing landing centres -- the places small craft '
+   'actually shelter, unlike OSM ports and marinas. SNAPSHOT frozen at '
+   '2024-04-27 (layer is named LandingCenters_29Apr2024): locations only, '
+   'surfaced with that date as the data age. The PFZ advisory fields in the '
+   'same rows are 2+ years stale and stored as provenance only. '
+   'DEPTH_FROM/DEPTH_TO are FISHING ZONE depths offshore, NOT harbour depths, '
+   'and are deliberately not loaded into depth_m.'),
   ('imd_cap',           'IMD CAP alerts',           'api',    0.98,
    'https://cap-sources.s3.amazonaws.com/in-imd-en/rss.xml',
    'Tier 1, VERIFIED REACHABLE with no credentials. Official CAP 1.2 warnings '

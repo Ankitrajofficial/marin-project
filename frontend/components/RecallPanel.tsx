@@ -41,6 +41,18 @@ function Row({ e, selected, onSelect }: {
           {/* draft_ok === null means unverifiable. Never a tick. */}
           {e.harbour.draft_ok === null && " · depth unverified"}
           {!e.time_is_routed && " · NO SAFE ROUTE"}
+          <br />
+          {/* Where the destination came from, and how old that is. An INCOIS
+              snapshot is useful but not live, and says so. */}
+          {e.harbour.source_id === "incois_lc" ? "INCOIS landing centre" :
+            e.harbour.source_id === "osm_harbours" ? "OSM harbour" :
+            (e.harbour.source_id ?? "unknown source")}
+          {e.harbour.snapshot_date
+            ? ` · snapshot ${e.harbour.snapshot_date}` +
+              (e.harbour.data_age_days !== null
+                ? ` (${e.harbour.data_age_days.toFixed(0)} days old)` : "")
+            : e.harbour.data_age_days !== null
+              ? ` · ${e.harbour.data_age_days.toFixed(1)} days old` : ""}
         </div>
       )}
       {selected && (

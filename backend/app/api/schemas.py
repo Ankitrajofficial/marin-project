@@ -229,6 +229,12 @@ class HarbourOut(BaseModel):
     #: None means UNVERIFIABLE, not True. A client must not render None as a
     #: tick.
     draft_ok: bool | None
+    #: Which dataset the destination came from -- 'incois_lc' (official Indian
+    #: fishing landing centre) or 'osm_harbours'. Required so a trace can say.
+    source_id: str | None = None
+    #: Set when the source is a frozen snapshot rather than a live feed.
+    snapshot_date: str | None = None
+    data_age_days: float | None = None
 
 
 class RecallEntryOut(BaseModel):

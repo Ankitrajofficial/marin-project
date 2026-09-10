@@ -49,6 +49,9 @@ def _out(e: RecallEntry) -> RecallEntryOut:
             distance_nm=round(e.harbour.distance_nm, 2),
             depth_source=e.harbour.depth_source, depth_m=e.harbour.depth_m,
             draft_ok=e.harbour.draft_ok,
+            source_id=e.harbour.source_id,
+            snapshot_date=e.harbour.snapshot_date,
+            data_age_days=e.harbour.data_age_days,
         ) if e.harbour else None,
         time_to_harbour_h=round(e.time_to_harbour_h, 2) if e.time_to_harbour_h is not None else None,
         time_is_routed=e.time_is_routed,
@@ -161,6 +164,14 @@ async def recall(
         "No route checks under-keel clearance. Draught is checked against the "
         "destination harbour only; depth along the track is not verified."
     )
+    srcs = {e.harbour.source_id for e in all_entries if e.harbour and e.harbour.source_id}
+    if "incois_lc" in srcs:
+        caveats.append(
+            "INCOIS landing-centre locations come from a snapshot frozen at "
+            "2024-04-27, not a live feed. Landing centres rarely move, so the "
+            "positions remain usable, but each destination reports its own "
+            "data age and none of it is presented as current."
+        )
     return RecallResponse(
         generated_at=now, threshold=threshold, detour_factor=DETOUR_FACTOR,
         distance_is_straight_line=n_straight > 0,
