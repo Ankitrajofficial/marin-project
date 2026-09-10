@@ -12,9 +12,14 @@ name: refresh-data
 
 on:
   schedule:
-    # Every 6 hours. Open-Meteo updates its marine run roughly that often, so
-    # anything more frequent re-fetches numbers that have not changed.
-    - cron: "0 */6 * * *"
+    # Every 12 hours, not 6. Open-Meteo's marine run does update about every 6
+    # hours, but its free quota is weighted by LOCATION, not by request: a
+    # 50-point chunk carrying six variables is worth roughly 300 of the
+    # 600-per-minute allowance, so one full coverage refresh costs thousands of
+    # the 10,000-per-day budget. Four runs a day would exhaust it and the later
+    # ones would fail outright. Twice a day fits, and the map is never more
+    # than half a forecast cycle behind.
+    - cron: "0 */12 * * *"
   workflow_dispatch:
     inputs:
       full:
@@ -48,7 +53,12 @@ jobs:
 
       # Static reference data: coastline zones, harbours, INCOIS landing
       # centres. They do not change between runs, and the OSM Overpass call is
-      # slow and rate-limited, so this is opt-in rather than every 6 hours.
+      # slow and rate-limited, so this is opt-in rather than every 12 hours.
+      #
+      # RUN THIS ONCE, FIRST, with full=true. The refresh below masks its
+      # coverage grid against the maritime zones this step loads; with an empty
+      # hazard_zones the mask matches nothing, falls back to the unmasked grid
+      # (logging why) and spends 2.3x the API quota on land cells.
       - name: Load static reference data
         if: inputs.full
         working-directory: backend
@@ -59,12 +69,23 @@ jobs:
           python -m jobs.ingest_harbours
           python -m jobs.ingest_landing_centres
 
-      # The actual refresh. Bbox covers the Indian EEZ around the southern
-      # peninsula -- the AOI the demo questions ask about.
+      # The actual refresh. The box spans the Kerala and Tamil Nadu coasts --
+      # the AOI the demo questions ask about -- and the mask keeps only the
+      # cells inside India's maritime zones: 2,160 cells become 922 at sea.
+      #
+      # --max-cells is REQUIRED and its absence was a latent failure. The
+      # 500-cell default in app/aoi.py is an accident guard, and
+      # core.grid.coverage_cells RAISES above it rather than truncating, so the
+      # previous 6/76/16/82 box (2,739 cells) would have taken this step down
+      # with a ValueError on its first run. It never got the chance: a
+      # scheduled workflow only fires from the repository's DEFAULT branch, and
+      # this file lived on a side branch, so the schedule had never run at all.
       - name: Ingest forecast and recompute risk
         working-directory: backend
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
-          python -m jobs.ingest_forecast --bbox 6.0 76.0 16.0 82.0 --forecast-days 3
+          python -m jobs.ingest_forecast \
+            --bbox 7.0 74.0 13.6 81.0 --max-cells 2500 --sea-only \
+            --forecast-days 3
           python -m jobs.compute_risk --hours 72
