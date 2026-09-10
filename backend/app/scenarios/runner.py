@@ -43,6 +43,7 @@ from app.adapters.base import (
     write_observations,
 )
 from app.config import SCENARIO_SOURCE_IDS
+from app.aoi import MARINE_ZONE_TYPES
 from app.core.grid import cell_for, centroid, coverage_cells, disk
 from app.scenarios.cyclone import SCENARIOS, CycloneSpec, eye_at, haversine_m, waves_from_wind, wind_at
 from app.scenarios.fleet import generate as generate_fleet
@@ -225,6 +226,56 @@ async def recompute_risk(conn: Any, now: datetime, hours: int = 48) -> int:
     return await write_risk_cells(conn, field)
 
 
+async def cells_at_sea(conn: Any, cells: list[str]) -> set[str]:
+    """Which of these H3 cells have their centroid in India's maritime zones.
+
+    Same test, same polygons and same reasoning as aoi.keep_points_at_sea --
+    imported from there so "at sea" has ONE definition -- but run on the
+    caller's connection, because activation is already inside a transaction.
+
+    WHY A SCENARIO NEEDS IT. The real field is sea-only for free: the marine
+    endpoint returns null over land. A parametric vortex has no such modesty --
+    it evaluates the Holland profile at every cell in its bbox and happily
+    writes 30 m/s over Madurai. The result was a hazard field that covered the
+    interior of Tamil Nadu the moment the scenario was activated, on a map
+    whose real field stops at the shoreline. That is a scenario changing the
+    DOMAIN of the map, not just its values, and it reads as a rendering bug.
+
+    A cyclone does of course have wind over land. ORCA's field is not that: it
+    is P(wave height or wind exceeds a threshold) for a boat at sea, and it has
+    no meaning in a cell no boat can occupy.
+    """
+    if not cells:
+        return set()
+    latlon = [centroid(c) for c in cells]
+    async with conn.cursor() as cur:
+        await cur.execute(
+            """
+            WITH sea AS (
+                SELECT ST_Union(geom) AS g
+                  FROM hazard_zones
+                 WHERE zone_type = ANY(%s)
+            )
+            SELECT p.cell
+              FROM unnest(%s::text[], %s::float8[], %s::float8[]) AS p(cell, lat, lon),
+                   sea
+             WHERE sea.g IS NOT NULL
+               AND ST_Contains(sea.g, ST_SetSRID(ST_MakePoint(p.lon, p.lat), 4326))
+            """,
+            (list(MARINE_ZONE_TYPES), cells,
+             [ll[0] for ll in latlon], [ll[1] for ll in latlon]),
+        )
+        keep = {r[0] for r in await cur.fetchall()}
+
+    if not keep:
+        # No marine polygon loaded. Masking to nothing would silently produce a
+        # scenario with no storm in it, which is worse than one that overreaches.
+        log.warning("scenario water mask matched no cells; leaving the field "
+                    "unmasked. Has jobs.ingest_zones been run?")
+        return set(cells)
+    return keep
+
+
 async def activate(conn: Any, name: str, now: datetime | None = None
                    ) -> dict[str, Any]:
     """Activate a scenario. One transaction from the caller's perspective."""
@@ -245,6 +296,11 @@ async def activate(conn: Any, name: str, now: datetime | None = None
     scenario_id = f"{name}:{uuid.uuid4().hex[:8]}"
 
     observations = build_field(spec, start)
+    n_raw = len(observations)
+    sea = await cells_at_sea(conn, sorted({o.h3_cell for o in observations}))
+    observations = [o for o in observations if o.h3_cell in sea]
+    log.info("scenario field: %d observations over %d cells, %d dropped on land",
+             len(observations), len(sea), n_raw - len(observations))
     fleet = generate_fleet(FLEET_SIZE)
 
     keys = sorted({(o.h3_cell, o.valid_time) for o in observations})

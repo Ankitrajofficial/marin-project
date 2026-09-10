@@ -441,12 +441,37 @@ def rank(entries: list[RecallEntry]) -> tuple[list[RecallEntry], list[RecallEntr
 # Takes a connection rather than opening one -- core/ does not own connection
 # lifecycle. Same rule as core/grid.fetch_observations.
 
+# The `simulated` column here is not a nicety, it is the hard guard applied to
+# the vessel itself.
+#
+# assess() computes simulated as "the vessel is simulated OR its hazard numbers
+# are", and the second half was carrying the whole flag: nothing in
+# vessel_positions or vessels says a boat is synthetic. A scenario boat sitting
+# in a cell the vortex does not reach -- the Gulf of Mannar fleet, well south of
+# a Bay of Bengal track -- therefore had real hazard numbers, no simulated
+# input anywhere in its assessment, and was served as simulated=false. The map
+# drew it in the colour of a real vessel and the panel gave it a real recall
+# ranking. An invented boat presented as a boat at sea is the exact failure the
+# simulated flag exists to prevent, and it was silent.
+#
+# scenario_runs.vessel_ids is the authority: the activation wrote that list,
+# and clearing the run ends it. An uncleared run (cleared_at IS NULL) is the
+# same definition of "active" that scenario status and clear use.
 _LATEST_POS = """
+WITH sim AS (
+    SELECT COALESCE(
+        (SELECT array_agg(mmsi)
+           FROM scenario_runs sr, unnest(sr.vessel_ids) AS mmsi
+          WHERE sr.cleared_at IS NULL),
+        ARRAY[]::text[]) AS ids
+)
 SELECT DISTINCT ON (vp.mmsi)
        vp.mmsi, vp.ts, vp.lat, vp.lon, vp.h3_cell,
-       v.name, v.vessel_class, v.cruise_speed, v.draft_m
+       v.name, v.vessel_class, v.cruise_speed, v.draft_m,
+       vp.mmsi = ANY(sim.ids) AS simulated
   FROM vessel_positions vp
   LEFT JOIN vessels v ON v.mmsi = vp.mmsi
+  CROSS JOIN sim
  WHERE vp.ts >= %(since)s
    {bbox}
  ORDER BY vp.mmsi, vp.ts DESC
@@ -501,7 +526,7 @@ async def gather(conn: Any, now: datetime,
     async with conn.cursor() as cur:
         await cur.execute(_LATEST_POS.format(bbox=bbox_sql), params)
         cols = ("mmsi", "ts", "lat", "lon", "h3_cell", "name", "vessel_class",
-                "cruise_speed", "draft_m")
+                "cruise_speed", "draft_m", "simulated")
         vessels = [dict(zip(cols, r)) for r in await cur.fetchall()]
 
         await cur.execute(_SOG_SAMPLES, {"since": since})
