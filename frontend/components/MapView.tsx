@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import maplibregl, { Map as MlMap } from "maplibre-gl";
-import type { RiskFeatureCollection, ZoneFeatureCollection } from "@/lib/types";
+import type { RecallEntry, RiskFeatureCollection, ZoneFeatureCollection } from "@/lib/types";
 import { HAZARD_STOPS, NO_DATA_COLOR, SIMULATED_OUTLINE } from "@/lib/color";
 
 // OSM raster tiles. No Mapbox, no API key, no token. Attribution is required
@@ -45,13 +45,15 @@ const ZONE_LINE_COLOR: (string | string[])[] = [
 
 export default function MapView({
   data, zones, selectedCell, onBboxChange, onCellClick, onMapClick, marker,
-  highlightCells, highlightZones,
+  highlightCells, highlightZones, vessels, selectedVessel,
 }: {
   data: RiskFeatureCollection | null;
   zones: ZoneFeatureCollection | null;
   selectedCell: string | null;
   highlightCells: string[];
   highlightZones: string[];
+  vessels: RecallEntry[];
+  selectedVessel: RecallEntry | null;
   onBboxChange: (bbox: [number, number, number, number]) => void;
   onCellClick: (cell: string) => void;
   onMapClick: (lat: number, lon: number) => void;
@@ -77,6 +79,14 @@ export default function MapView({
 
     m.on("load", () => {
       m.addSource("risk", { type: "geojson", data: EMPTY });
+      m.addSource("vessels", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] } as GeoJSON.FeatureCollection,
+      });
+      m.addSource("route", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] } as GeoJSON.FeatureCollection,
+      });
       m.addSource("zones", {
         type: "geojson",
         data: { type: "FeatureCollection", features: [] } as GeoJSON.FeatureCollection,
@@ -123,6 +133,41 @@ export default function MapView({
         id: "zone-highlight", type: "line", source: "zones",
         filter: ["in", ["get", "zone_id"], ["literal", []]],
         paint: { "line-color": "#ffffff", "line-width": 3.5 },
+      });
+
+      // The straight-line leg to the target harbour. DASHED on purpose: it
+      // is not a route, and drawing it solid would imply routing.py exists.
+      m.addLayer({
+        id: "route-line", type: "line", source: "route",
+        filter: ["==", ["geometry-type"], "LineString"],
+        paint: { "line-color": "#ffd60a", "line-width": 2,
+                 "line-dasharray": [2, 2] },
+      });
+      // How far the vessel could actually be, given the age of its last fix.
+      m.addLayer({
+        id: "vessel-uncertainty", type: "circle", source: "vessels",
+        paint: {
+          "circle-radius": ["max", 4, ["*", ["get", "uncertainty_nm"], 2.2]],
+          "circle-color": "#4da3d4", "circle-opacity": 0.12,
+          "circle-stroke-width": 0.5, "circle-stroke-color": "#4da3d4",
+        },
+      });
+      m.addLayer({
+        id: "vessel-dot", type: "circle", source: "vessels",
+        paint: {
+          "circle-radius": ["case", ["get", "selected"], 7, 4.5],
+          "circle-color": ["case",
+            ["get", "simulated"], "#c026d3",
+            ["get", "urgent"], "#d9534f",
+            "#e6edf3"],
+          "circle-stroke-width": 1.5, "circle-stroke-color": "#10151c",
+        },
+      });
+      m.addLayer({
+        id: "harbour-dot", type: "circle", source: "route",
+        filter: ["==", ["geometry-type"], "Point"],
+        paint: { "circle-radius": 6, "circle-color": "#ffd60a",
+                 "circle-stroke-width": 1.5, "circle-stroke-color": "#10151c" },
       });
 
       m.addLayer({
@@ -203,6 +248,45 @@ export default function MapView({
     if (!m || !m.getLayer("risk-selected")) return;
     m.setFilter("risk-selected", ["==", ["get", "h3_cell"], selectedCell ?? ""]);
   }, [selectedCell]);
+
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !m.isStyleLoaded()) return;
+    const vs = m.getSource("vessels") as maplibregl.GeoJSONSource | undefined;
+    if (vs) {
+      vs.setData({
+        type: "FeatureCollection",
+        features: vessels.map((v) => ({
+          type: "Feature" as const,
+          geometry: { type: "Point" as const, coordinates: [v.lon, v.lat] },
+          properties: {
+            mmsi: v.mmsi,
+            uncertainty_nm: v.position_uncertainty_nm,
+            simulated: v.simulated,
+            urgent: v.margin_h !== null && v.margin_h < 3,
+            selected: selectedVessel?.mmsi === v.mmsi,
+          },
+        })),
+      });
+    }
+    const rs = m.getSource("route") as maplibregl.GeoJSONSource | undefined;
+    if (rs) {
+      const v = selectedVessel;
+      rs.setData({
+        type: "FeatureCollection",
+        features: v && v.harbour ? [
+          { type: "Feature" as const,
+            geometry: { type: "LineString" as const,
+              coordinates: [[v.lon, v.lat], [v.harbour.lon, v.harbour.lat]] },
+            properties: {} },
+          { type: "Feature" as const,
+            geometry: { type: "Point" as const,
+              coordinates: [v.harbour.lon, v.harbour.lat] },
+            properties: { name: v.harbour.name } },
+        ] : [],
+      });
+    }
+  }, [vessels, selectedVessel]);
 
   useEffect(() => {
     const m = map.current;

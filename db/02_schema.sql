@@ -37,8 +37,28 @@ CREATE TABLE IF NOT EXISTS harbours (
     name       TEXT NOT NULL,
     lat        DOUBLE PRECISION NOT NULL,
     lon        DOUBLE PRECISION NOT NULL,
-    depth_m    DOUBLE PRECISION,        -- limits which vessels can enter (draft_m)
+    depth_m    DOUBLE PRECISION,        -- usable depth. Limits which vessels
+                                        -- can enter (see vessels.draft_m).
+    -- HARD FLAG. OpenStreetMap carries NO depth or draught tag on ANY harbour
+    -- in our AOI -- verified, 103 features, zero tagged. So depth_m is NULL
+    -- almost everywhere, and 'unknown' is the normal case rather than an edge
+    -- case. NOT NULL forces the loader to say which it is, and core/recall.py
+    -- must treat 'unknown' as a candidate WITH REDUCED CONFIDENCE, never as
+    -- "deep enough".
+    --
+    -- Deliberately NOT filled from GEBCO. GEBCO is seabed bathymetry on a
+    -- ~450 m grid; usable harbour depth is a dredged, maintained channel
+    -- figure that GEBCO cannot see. Substituting one for the other would
+    -- manufacture a safety claim out of data that does not contain one.
+    depth_source TEXT NOT NULL DEFAULT 'unknown',
+    harbour_type TEXT,                  -- fishing | marina | port | shipyard | unknown
     capacity   INTEGER,
+    source_id  TEXT REFERENCES sources(source_id),
+    source_url TEXT,
+    meta       JSONB,
+    fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT harbours_depth_source CHECK (
+        depth_source IN ('osm', 'chart', 'manual', 'unknown')),
     -- Generated, so geom can never drift out of sync with lat/lon.
     geom       GEOMETRY(Point, 4326)
                GENERATED ALWAYS AS (ST_SetSRID(ST_MakePoint(lon, lat), 4326)) STORED
@@ -219,6 +239,23 @@ CREATE TABLE IF NOT EXISTS advisory_chunks (
     -- No ANN index yet: the operator class depends on cosine vs L2, which is
     -- decided when the first embeddings land. Exact search is fine until then.
 );
+
+-- ---------------------------------------------------------- ingest_gaps
+-- Every period an ingest stream was NOT listening. A durable table, not a log
+-- line, because the question it answers is asked after the fact: "we have no
+-- position for that boat between 14:02 and 14:09 -- was it not transmitting,
+-- or were we not listening?" Those are completely different answers for a
+-- recall list, and a log lost to a restart cannot distinguish them.
+CREATE TABLE IF NOT EXISTS ingest_gaps (
+    gap_id     BIGSERIAL PRIMARY KEY,
+    source_id  TEXT REFERENCES sources(source_id),
+    started_at TIMESTAMPTZ NOT NULL,
+    ended_at   TIMESTAMPTZ,             -- NULL = still down
+    reason     TEXT,
+    messages_before BIGINT              -- received before the gap, for context
+);
+CREATE INDEX IF NOT EXISTS ingest_gaps_source_time_idx
+    ON ingest_gaps (source_id, started_at DESC);
 
 -- --------------------------------------------------------------- traces
 -- The audit record enforcing the hard rule: every number an agent utters is

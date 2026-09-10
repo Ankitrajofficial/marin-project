@@ -145,3 +145,40 @@ export interface ChatResponse {
   fell_back: boolean;
   highlights: { cells: string[]; zones: string[] };
 }
+
+// ---------------------------------------------------------------------------
+// Recall triage.
+export interface RecallHarbour {
+  harbour_id: string; name: string; lat: number; lon: number;
+  harbour_type: string | null; distance_nm: number;
+  depth_source: string; depth_m: number | null;
+  // null = UNVERIFIABLE, not true. Must never render as a tick.
+  draft_ok: boolean | null;
+}
+
+export interface RecallEntry {
+  mmsi: string; name: string | null; vessel_class: string | null;
+  lat: number; lon: number; h3_cell: string; draft_m: number | null;
+  position_time: string; position_age_minutes: number;
+  position_is_stale: boolean; position_uncertainty_nm: number;
+  speed_ms: number; speed_source: string; speed_samples: number;
+  harbour: RecallHarbour | null;
+  time_to_harbour_h: number | null;
+  time_to_hazard_h: number | null;
+  hazard_time: string | null;
+  hazard_prob_at_crossing: number | null;
+  hazard_driver: string | null;
+  hazard_data_age_minutes: number | null;
+  margin_h: number | null;
+  status: string; reasons: string[]; flags: string[]; simulated: boolean;
+}
+
+export interface RecallResponse {
+  generated_at: string; threshold: number; detour_factor: number;
+  distance_is_straight_line: boolean;
+  n_vessels: number; n_harbours: number;
+  ranked: RecallEntry[];
+  cannot_assess: RecallEntry[];
+  simulated: boolean;
+  caveats: string[];
+}

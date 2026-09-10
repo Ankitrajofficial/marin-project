@@ -10,6 +10,11 @@ INSERT INTO sources (source_id, name, access_mode, reliability, base_url, notes)
   ('open_meteo_wx',     'Open-Meteo Weather',       'api',    0.75,
    'https://api.open-meteo.com/v1/forecast',
    'Tier 1. No key. Wind speed/gust/direction.'),
+  ('osm_harbours',      'OSM Harbours',             'api',    0.75,
+   'https://overpass-api.de/api/interpreter',
+   'Tier 1. No key. Harbour/marina/fishing-harbour locations. NOTE: OSM '
+   'carries no usable-depth tag for any harbour in the AOI, so draft '
+   'compatibility is UNKNOWN, never assumed.'),
   ('aisstream',         'AISStream',                'api',    0.90,
    'wss://stream.aisstream.io/v0/stream',
    'Tier 1 but needs a free key. Live AIS vessel positions via websocket.'),

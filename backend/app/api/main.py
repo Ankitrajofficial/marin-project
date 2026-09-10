@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routers import cells, chat, geofence, health, risk
+from app.api.routers import cells, chat, geofence, health, recall, risk
 from app.config import settings
 from app.db import close_pool, open_pool
 
@@ -60,3 +60,4 @@ app.include_router(risk.router)
 app.include_router(cells.router)
 app.include_router(geofence.router)
 app.include_router(chat.router)
+app.include_router(recall.router)

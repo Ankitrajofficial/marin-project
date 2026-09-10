@@ -205,3 +205,80 @@ class ZoneFeatureCollection(BaseModel):
     attributions: list[str]
     disclaimer: str
     features: list[ZoneFeature]
+
+
+# ---------------------------------------------------------------------------
+# /api/recall
+# ---------------------------------------------------------------------------
+class HarbourOut(BaseModel):
+    harbour_id: str
+    name: str
+    lat: float
+    lon: float
+    harbour_type: str | None
+    distance_nm: float
+    #: 'osm' = a real tagged depth. 'unknown' = OSM had none, which is every
+    #: harbour in the AOI today. Required, so a client cannot render a target
+    #: harbour without knowing whether its depth was ever checked.
+    depth_source: str
+    depth_m: float | None
+    #: None means UNVERIFIABLE, not True. A client must not render None as a
+    #: tick.
+    draft_ok: bool | None
+
+
+class RecallEntryOut(BaseModel):
+    mmsi: str
+    name: str | None
+    vessel_class: str | None
+    lat: float
+    lon: float
+    h3_cell: str
+    draft_m: float | None
+
+    position_time: datetime
+    position_age_minutes: float
+    position_is_stale: bool
+    #: age x speed -- how far the vessel could be from the plotted point.
+    position_uncertainty_nm: float
+
+    speed_ms: float
+    speed_source: str
+    speed_samples: int
+
+    harbour: HarbourOut | None
+    time_to_harbour_h: float | None
+    time_to_hazard_h: float | None
+    hazard_time: datetime | None
+    hazard_prob_at_crossing: float | None
+    hazard_driver: str | None
+    hazard_data_age_minutes: float | None
+
+    #: time_to_hazard - time_to_harbour. Negative = cannot make it.
+    margin_h: float | None
+    status: str
+    reasons: list[str] = Field(default_factory=list)
+    flags: list[str] = Field(default_factory=list)
+    simulated: bool
+
+
+class RecallResponse(BaseModel):
+    generated_at: datetime
+    threshold: float
+    #: Straight-line distance x this factor stands in for a real route until
+    #: core/routing.py exists. Reported because it changes every margin.
+    detour_factor: float
+    distance_is_straight_line: bool
+
+    n_vessels: int
+    n_harbours: int
+    #: Ranked ascending by margin -- smallest slack first.
+    ranked: list[RecallEntryOut]
+    #: NEVER merged into `ranked`. A vessel that could not be evaluated must
+    #: reach a human, not sink to the bottom of a list.
+    cannot_assess: list[RecallEntryOut]
+
+    simulated: bool
+    #: Plain-language limits of this particular result. Present so a thin
+    #: ranking is read as thin data, not as a calm sea.
+    caveats: list[str]

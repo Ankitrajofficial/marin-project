@@ -27,6 +27,9 @@ fastapi>=0.115             # routes + response models. The response models are
                            # code-review question.
 uvicorn[standard]>=0.32    # ASGI server
 
+# --- AIS (step 8) -----------------------------------------------------------
+websockets>=13             # AISStream is a WebSocket feed; httpx cannot do it
+
 # --- agents (step 7) --------------------------------------------------------
 langgraph>=0.2             # StateGraph + in-memory checkpointer
 # No provider SDK. agents/llm.py speaks the OpenAI-compatible chat-completions

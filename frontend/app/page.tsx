@@ -7,10 +7,13 @@ import TracePanel from "@/components/TracePanel";
 import Legend from "@/components/Legend";
 import ChatPanel from "@/components/ChatPanel";
 import GeofencePanel from "@/components/GeofencePanel";
+import RecallPanel from "@/components/RecallPanel";
 import { fetchGeofence, fetchRisk, fetchTimes, fetchTrace, fetchZones } from "@/lib/api";
 import type {
-  CellTrace, GeofenceResponse, RiskFeatureCollection, ZoneFeatureCollection,
+  CellTrace, GeofenceResponse, RecallEntry, RecallResponse,
+  RiskFeatureCollection, ZoneFeatureCollection,
 } from "@/lib/types";
+import { fetchRecall } from "@/lib/api";
 
 type Bbox = [number, number, number, number];
 
@@ -26,6 +29,10 @@ export default function Page() {
   const [geofence, setGeofence] = useState<GeofenceResponse | null>(null);
   const [gfLoading, setGfLoading] = useState(false);
   const [gfError, setGfError] = useState<string | null>(null);
+
+  const [tab, setTab] = useState<"position" | "recall">("position");
+  const [recall, setRecall] = useState<RecallResponse | null>(null);
+  const [vessel, setVessel] = useState<RecallEntry | null>(null);
 
   const [hlCells, setHlCells] = useState<string[]>([]);
   const [hlZones, setHlZones] = useState<string[]>([]);
@@ -84,6 +91,12 @@ export default function Page() {
       .finally(() => setTraceLoading(false));
   }, [selected, index, times]);
 
+  // Vessel positions are drawn whichever tab is open, so a hazard cell and the
+  // boats inside it are visible together rather than in separate views.
+  useEffect(() => {
+    fetchRecall(0.05).then(setRecall).catch(() => setRecall(null));
+  }, []);
+
   const onBboxChange = useCallback((b: Bbox) => setBbox(b), []);
   const onCellClick = useCallback((c: string) => setSelected(c), []);
   const onMapClick = useCallback(
@@ -94,8 +107,9 @@ export default function Page() {
   }, []);
   const closePanel = useCallback(() => {
     setSelected(null); setPoint(null); setGeofence(null); setGfError(null);
+    setTab("position"); setVessel(null);
   }, []);
-  const panelOpen = point !== null || selected !== null;
+  const panelOpen = point !== null || selected !== null || tab === "recall";
 
   return (
     <main className="shell">
@@ -117,6 +131,8 @@ export default function Page() {
         marker={point}
         highlightCells={hlCells}
         highlightZones={hlZones}
+        vessels={recall ? [...recall.ranked, ...recall.cannot_assess] : []}
+        selectedVessel={vessel}
       />
 
       <ChatPanel onHighlight={onHighlight} />
@@ -127,8 +143,9 @@ export default function Page() {
         </div>
         <div className="hint">
           {risk ? `${risk.n_features} cells` : "…"}
-          {zones ? ` · ${zones.n_features} boundaries` : ""} · click the map for
-          a position check
+          {zones ? ` · ${zones.n_features} boundaries` : ""}
+          {recall ? ` · ${recall.n_vessels} vessels` : ""} · click the map for a
+          position check
         </div>
       </div>
 
@@ -146,9 +163,22 @@ export default function Page() {
       {panelOpen && (
         <aside className="panel">
           <button className="close" onClick={closePanel}>×</button>
-          <h2>Position report</h2>
-          <GeofencePanel geofence={geofence} loading={gfLoading} error={gfError} />
-          <TracePanel trace={trace} loading={traceLoading} error={traceError} />
+          <div className="tabs">
+            <button className={tab === "position" ? "on" : ""}
+                    onClick={() => setTab("position")}>Position</button>
+            <button className={tab === "recall" ? "on" : ""}
+                    onClick={() => setTab("recall")}>
+              Recall{recall ? ` (${recall.n_vessels})` : ""}
+            </button>
+          </div>
+          {tab === "position" ? (
+            <>
+              <GeofencePanel geofence={geofence} loading={gfLoading} error={gfError} />
+              <TracePanel trace={trace} loading={traceLoading} error={traceError} />
+            </>
+          ) : (
+            <RecallPanel selected={vessel} onSelect={setVessel} />
+          )}
         </aside>
       )}
     </main>

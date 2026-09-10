@@ -1,6 +1,6 @@
 import type {
-  CellTrace, ChatResponse, GeofenceResponse, RiskFeatureCollection, RiskTimes,
-  ZoneFeatureCollection,
+  CellTrace, ChatResponse, GeofenceResponse, RecallResponse,
+  RiskFeatureCollection, RiskTimes, ZoneFeatureCollection,
 } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
@@ -49,3 +49,6 @@ export async function sendChat(message: string, sessionId: string | null) {
   }
   return (await res.json()) as ChatResponse;
 }
+
+export const fetchRecall = (threshold = 0.05) =>
+  get<RecallResponse>(`/api/recall?threshold=${threshold}`);
