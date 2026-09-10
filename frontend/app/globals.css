@@ -148,3 +148,12 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .official-body { padding: 8px 9px; font-size: 12px; line-height: 1.55; }
 .attrib { margin-top: 7px; padding-top: 6px; border-top: 1px solid var(--line);
   color: var(--muted); font-size: 10.5px; line-height: 1.5; }
+
+/* ---- streaming chat ---- */
+.phases { font-size: 12px; line-height: 1.7; }
+.phase-done { color: var(--muted); }
+.phase-now { color: var(--accent); }
+.caret { display: inline-block; width: 7px; height: 13px; margin-left: 2px;
+  background: var(--accent); vertical-align: text-bottom;
+  animation: blink 1s steps(2, start) infinite; }
+@keyframes blink { to { visibility: hidden; } }

@@ -27,6 +27,7 @@ persistent checkpointer.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -329,3 +330,150 @@ async def ask(session_id: str, question: str) -> AgentState:
     ]
     await GRAPH.aupdate_state(config, {"history": result["history"]})
     return result
+
+
+# ===========================================================================
+# Streaming
+# ===========================================================================
+#: Human-readable labels for the deterministic work. The tool phase is worth
+#: SHOWING, not hiding: it is the part of the answer that is actually
+#: trustworthy, and a user watching "checking maritime boundaries…" is being
+#: told something true about where the number comes from.
+TOOL_LABELS = {
+    "get_risk": "checking wave and wind forecast",
+    "check_boundaries": "checking maritime boundaries",
+    "get_conditions": "reading current sea conditions",
+}
+
+#: Characters per streamed chunk once the text is guarded. Small enough to
+#: read as typing, large enough not to flood the connection.
+STREAM_CHUNK = 6
+STREAM_DELAY_S = 0.012
+
+
+async def ask_streaming(session_id: str, question: str):
+    """Run one turn, yielding events as it goes.
+
+    WHY THE ANSWER IS BUFFERED BEFORE IT STREAMS
+    --------------------------------------------
+    The obvious implementation streams model tokens straight through and
+    retracts them if the guard rejects the result. We do not do that.
+
+    A retracted number has still been read. This system's entire premise is
+    that no unverified figure reaches a person, and "it was on screen for
+    600 ms then we took it back" does not satisfy that -- in a demo someone
+    photographs it, in the field someone acts on it. So synthesis is collected
+    in full, guarded exactly as the non-streaming path guards it, and only
+    verified text is ever emitted.
+
+    That does not make the answer arrive sooner. What it does is replace
+    fifteen seconds of silence with a running account of the deterministic
+    work, which is the part that actually looked broken -- and the tool phase
+    is genuinely informative rather than a spinner.
+    """
+    state: AgentState = {
+        "session_id": session_id, "question": question,
+        "history": [], "steps": [], "retries": 0,
+    }
+    config = {"configurable": {"thread_id": session_id}}
+    prior = await GRAPH.aget_state(config)
+    history = (prior.values.get("history") or []) if prior and prior.values else []
+    state["history"] = history
+
+    yield {"type": "phase", "phase": "understanding",
+           "label": "reading your question"}
+
+    state = await understand(state)
+    plan = state.get("plan") or {}
+    yield {"type": "plan", "intent": plan.get("intent"),
+           "reasoning": plan.get("reasoning"),
+           "calls": [{"tool": c["tool"], "place": c.get("place"),
+                      "when": c.get("when"),
+                      "label": TOOL_LABELS.get(c["tool"], c["tool"])}
+                     for c in plan.get("calls", [])]}
+
+    if plan.get("intent") == "unsupported" or not plan.get("calls"):
+        state = await execute(state)
+        state = await synthesize(state)
+        answer = state.get("answer", "")
+        for i in range(0, len(answer), STREAM_CHUNK):
+            yield {"type": "token", "text": answer[i:i + STREAM_CHUNK]}
+            await asyncio.sleep(STREAM_DELAY_S)
+        yield {"type": "done", "state": state}
+        return
+
+    # ---- deterministic work, narrated -----------------------------------
+    now = datetime.now(timezone.utc)
+    results: list[dict[str, Any]] = []
+    async with get_conn() as conn:
+        for call in plan["calls"]:
+            if call["tool"] not in TOOL_NAMES:
+                continue
+            label = TOOL_LABELS.get(call["tool"], call["tool"])
+            place = call.get("place") or ""
+            yield {"type": "phase", "phase": "tool", "tool": call["tool"],
+                   "label": f"{label}{f' near {place}' if place else ''}"}
+            args = {k: v for k, v in call.items() if k != "tool" and v is not None}
+            t0 = time.perf_counter()
+            result = await run_tool(conn, call["tool"], args, now=now)
+            ms = round((time.perf_counter() - t0) * 1000)
+            results.append(result)
+            _step(state, node="execute", tool=call["tool"], input=args,
+                  output=result, duration_ms=ms)
+            yield {"type": "phase", "phase": "tool_done", "tool": call["tool"],
+                   "label": label, "duration_ms": ms,
+                   "error": result.get("error")}
+
+    state["tool_results"] = results
+    state["findings_text"] = explain.findings_text(results)
+    state["simulated"] = any(r.get("simulated") for r in results)
+    adv = [r["advisory_only"] for r in results if "advisory_only" in r]
+    state["advisory_only"] = all(adv) if adv else None
+
+    # ---- synthesis: buffered, then guarded, then streamed ----------------
+    yield {"type": "phase", "phase": "writing",
+           "label": "writing the answer from the computed results"}
+
+    for attempt in range(MAX_SYNTH_RETRIES + 1):
+        state = await synthesize(state)
+        report = guards.check(state.get("answer", ""), state["tool_results"],
+                              state.get("findings_text", ""))
+        _step(state, node="guard", input={"answer": state.get("answer", "")},
+              output={"ok": report.ok,
+                      "unverified_numbers": report.unverified_numbers,
+                      "uncontrolled_terms": report.uncontrolled_terms})
+        if report.ok:
+            state["guard_feedback"] = ""
+            state["fell_back"] = False
+            break
+        if attempt < MAX_SYNTH_RETRIES:
+            state["retries"] = attempt + 1
+            state["guard_feedback"] = report.message()
+            yield {"type": "phase", "phase": "rejected",
+                   "label": "the draft cited a number the tools did not "
+                            "return; rewriting"}
+            continue
+        # Second failure: the deterministic findings, verbatim.
+        log.warning("guard failed twice (streaming); serving findings. %s",
+                    report.message())
+        state["answer"] = ("Reporting the computed results directly:\n"
+                           + state["findings_text"])
+        state["fell_back"] = True
+        state["guard_feedback"] = ""
+        _step(state, node="fallback", input={"reason": report.message()},
+              output={"answer": state["answer"]})
+        yield {"type": "phase", "phase": "fallback",
+               "label": "serving the computed results verbatim"}
+
+    answer = state.get("answer", "")
+    for i in range(0, len(answer), STREAM_CHUNK):
+        yield {"type": "token", "text": answer[i:i + STREAM_CHUNK]}
+        await asyncio.sleep(STREAM_DELAY_S)
+
+    new_history = history + [
+        {"role": "user", "content": question},
+        {"role": "assistant", "content": answer},
+    ]
+    await GRAPH.aupdate_state(config, {"history": new_history})
+    state["history"] = new_history
+    yield {"type": "done", "state": state}

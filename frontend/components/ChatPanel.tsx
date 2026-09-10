@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { sendChat } from "@/lib/api";
+import { streamChat } from "@/lib/api";
 import type { ChatResponse } from "@/lib/types";
 
 interface Turn {
@@ -9,6 +9,7 @@ interface Turn {
   text: string;
   meta?: ChatResponse;
   error?: boolean;
+  streaming?: boolean;
 }
 
 const EXAMPLES = [
@@ -31,6 +32,7 @@ export default function ChatPanel({
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [phases, setPhases] = useState<string[]>([]);
   const [session, setSession] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -40,19 +42,40 @@ export default function ChatPanel({
     const q = text.trim();
     if (!q || busy) return;
     setInput("");
-    setTurns((t) => [...t, { role: "user", text: q }]);
+    // The assistant turn is created empty and filled as the stream arrives.
+    setTurns((t) => [...t, { role: "user", text: q },
+                     { role: "assistant", text: "", streaming: true }]);
     setBusy(true);
+    setPhases([]);
+
+    const patchLast = (fn: (t: Turn) => Turn) =>
+      setTurns((ts) => ts.map((t, i) => (i === ts.length - 1 ? fn(t) : t)));
+
     try {
-      const r = await sendChat(q, session);
-      setSession(r.session_id);
-      setTurns((t) => [...t, { role: "assistant", text: r.answer, meta: r }]);
-      onHighlight(r.highlights.cells, r.highlights.zones);
+      await streamChat(q, session, {
+        onOpen: setSession,
+        // The deterministic work, narrated. This is the part of the answer
+        // that is actually trustworthy, so it is shown rather than hidden
+        // behind a spinner.
+        onPhase: (label, phase) =>
+          setPhases((p) => (phase === "tool_done" ? p : [...p, label])),
+        onPlan: (_intent, labels) =>
+          setPhases((p) => [...p, ...labels.filter((l) => !p.includes(l))]),
+        onToken: (chunk) => patchLast((t) => ({ ...t, text: t.text + chunk })),
+        onDone: (payload) => {
+          patchLast((t) => ({ ...t, text: payload.answer, meta: payload,
+                              streaming: false }));
+          onHighlight(payload.highlights.cells, payload.highlights.zones);
+          setPhases([]);
+        },
+        // Never fabricate an answer on failure. Say what went wrong.
+        onError: (message) =>
+          patchLast((t) => ({ ...t, text: message, error: true,
+                              streaming: false })),
+      });
     } catch (e) {
-      // Never fabricate an answer on failure. Say what went wrong.
-      setTurns((t) => [
-        ...t,
-        { role: "assistant", text: (e as Error).message, error: true },
-      ]);
+      patchLast((t) => ({ ...t, text: (e as Error).message, error: true,
+                          streaming: false }));
     } finally {
       setBusy(false);
     }
@@ -77,7 +100,10 @@ export default function ChatPanel({
 
         {turns.map((t, i) => (
           <div key={i} className={`bubble ${t.role}${t.error ? " err-bubble" : ""}`}>
-            <div style={{ whiteSpace: "pre-wrap" }}>{t.text}</div>
+            <div style={{ whiteSpace: "pre-wrap" }}>
+              {t.text}
+              {t.streaming && <span className="caret" />}
+            </div>
 
             {t.meta && (
               <>
@@ -132,7 +158,17 @@ export default function ChatPanel({
           </div>
         ))}
 
-        {busy && <div className="bubble assistant hint">thinking…</div>}
+        {/* Live account of the deterministic work while it runs. */}
+        {busy && phases.length > 0 && (
+          <div className="bubble assistant phases">
+            {phases.map((p, i) => (
+              <div key={i} className={i === phases.length - 1 ? "phase-now" : "phase-done"}>
+                {i === phases.length - 1 ? "▸ " : "✓ "}{p}
+                {i === phases.length - 1 ? "…" : ""}
+              </div>
+            ))}
+          </div>
+        )}
         <div ref={endRef} />
       </div>
 
