@@ -118,9 +118,49 @@ def _verified(token_int: str, token_dec: str, is_pct: bool,
     return False
 
 
-def check_numbers(text: str, tool_results: Any) -> list[str]:
-    """Every number in `text` that is not derivable from `tool_results`."""
+def collect_derived(findings_text: str, values: set[float]) -> set[float]:
+    """Add every number the DETERMINISTIC layer already printed.
+
+    WHY THIS IS NOT A HOLE IN THE HARD RULE. `findings_text` is not model
+    output: explain.py builds it in Python from tool results, and synthesize()
+    hands it to the model as the FINDINGS block it is told to write prose
+    around. A number in there is already traceable to a tool result -- it just
+    reached the page through a unit conversion rather than verbatim.
+
+    WHY IT IS NEEDED. explain.py converts as it renders, and the converted
+    value exists nowhere in the tool JSON:
+
+        _age()  age_minutes 275.4  ->  "at least 4.6 h old"
+        pct()   0.2911             ->  "29.1%"
+
+    The percentage survives the a*100 rule in _verified(). The age does not.
+    So an answer that copied "4.6 h" exactly as instructed was reported as a
+    fabrication, twice, and every question whose findings mention data age --
+    which is all of them, data age is in sources_line() -- fell back to the
+    bullet dump. The guard was rejecting the one thing it exists to require.
+
+    Only the values are widened, never the literals: a decimal in the findings
+    verifies at the precision it was written to, and does not license the bare
+    integer part on its own.
+    """
+    for m in _NUMBER.finditer(findings_text):
+        raw, dec = m.group(1).replace(",", ""), m.group(2)
+        try:
+            values.add(float(raw + (f".{dec}" if dec else "")))
+        except ValueError:
+            continue
+    return values
+
+
+def check_numbers(text: str, tool_results: Any, findings_text: str = "") -> list[str]:
+    """Every number in `text` that is not derivable from `tool_results`.
+
+    `findings_text` is the deterministic rendering the model was asked to
+    verbalize; numbers it already printed count as derivable. Defaults to empty
+    so a caller that only has tool results still gets the strict check.
+    """
     values, literals = collect_allowed(tool_results)
+    collect_derived(findings_text, values)
     bad = []
     for m in _NUMBER.finditer(text):
         token_int, token_dec, pct = m.group(1), m.group(2), m.group(3)
@@ -140,7 +180,7 @@ def check_terms(text: str, allowed_text: str) -> list[str]:
 
 
 def check(text: str, tool_results: Any, allowed_text: str) -> GuardReport:
-    bad_numbers = check_numbers(text, tool_results)
+    bad_numbers = check_numbers(text, tool_results, allowed_text)
     bad_terms = check_terms(text, allowed_text)
     return GuardReport(
         ok=not bad_numbers and not bad_terms,
