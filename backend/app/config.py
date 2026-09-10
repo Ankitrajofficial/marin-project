@@ -58,7 +58,25 @@ class Settings(BaseSettings):
     llm_provider: str = "gemini"
     # gemini-2.5-flash is retired for new API users (the endpoint returns a
     # 404 naming its replacement). Changing this line is the whole migration.
-    llm_model: str = "gemini-3.6-flash"
+    #
+    # THE FREE-TIER DAILY CAP IS PER MODEL, AND IT PICKS THE MODEL FOR US.
+    # gemini-3.6-flash allows 20 generate_content requests PER DAY on the free
+    # tier (quotaId GenerateRequestsPerDayPerProjectPerModel-FreeTier,
+    # quotaValue 20). A question costs two calls -- understand plans, synthesize
+    # verbalizes -- and a guard rejection costs another, so the whole chat layer
+    # died after eight or nine questions in a day and stayed dead until the
+    # quota reset. In a demo that reads as a broken product, and the 429 arrives
+    # long after whoever set it up has stopped watching.
+    #
+    # The cap is per project PER MODEL, so a different model is a different
+    # budget. flash-lite is also the right size for the work: under the hard
+    # rule the model never produces a number -- it chooses a tool and writes
+    # prose around figures explain.py has already computed, and guards.py
+    # rejects anything else. Model capability is not load-bearing for
+    # correctness here, which is exactly what lets the cheapest tier do it.
+    #
+    # Override with LLM_MODEL in .env; llm_base_url stays the same.
+    llm_model: str = "gemini-3.1-flash-lite"
     #: OpenAI-compatible endpoint. Gemini exposes one, so llm.py speaks a
     #: single wire format and any OpenAI-compatible provider drops in.
     llm_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai"
